@@ -12,8 +12,8 @@ export async function searchWithAI(client: SupabaseClient<Database>, query: stri
   try {
     const answer = await result.text;
     if (!answer.trim()) throw new Error('Lovable AI non ha restituito una risposta.');
-    const ids = [...answer.matchAll(/\[\[([\da-f-]{36})\]\]/gi)].map(m => m[1]);
-    return { results: notes.filter(n => ids.includes(n.id)).map(({ id, title, type }) => ({ id, title, type })), answer: answer.replace(/\[\[([\da-f-]{36})\]\]/gi, (_, id: string) => `“${notes.find(n => n.id === id)?.title ?? 'Nota'}”`), error: '' };
+    const ids = [...answer.matchAll(/\[\[(?:id\s+)?([\da-f-]{36})\]\]/gi)].map(m => m[1]);
+    return { results: notes.filter(n => ids.includes(n.id)).map(({ id, title, type }) => ({ id, title, type })), answer: answer.replace(/\[\[(?:id\s+)?([\da-f-]{36})\]\]/gi, (_, id: string) => `“${notes.find(n => n.id === id)?.title ?? 'Nota'}”`), error: '' };
   } catch (err) {
     const raw = err as { statusCode?: number; responseBody?: string; message?: string };
     let message = raw.message || 'Lovable AI non disponibile.';
