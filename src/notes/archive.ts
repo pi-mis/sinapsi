@@ -36,10 +36,10 @@ export function createZip(archive: Archive) {
   const files: Record<string, Uint8Array> = { 'notes.json': strToU8(JSON.stringify(archive, null, 2)) };
   const notes = archive.tables.notes;
   for (const n of notes) {
-    const tags = archive.tables.note_tags.filter(l => l['note_id'] === n['id']).map(l => archive.tables.tags.find(t => t['id'] === l['tag_id'])?.name).filter(Boolean);
+    const tags = archive.tables.note_tags.filter(l => l['note_id'] === n['id']).map(l => archive.tables.tags.find(t => t['id'] === l['tag_id'])?.['name']).filter(Boolean);
     const links = archive.tables.edges.filter(e => e['a'] === n['id'] || e['b'] === n['id']).map(e => notes.find(other => other['id'] === (e['a'] === n['id'] ? e['b'] : e['a']))).filter(Boolean);
     const filename = `${String(n['title'] || 'Senza titolo').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 70)}--${n['id']}`;
-    const text = `---\n['title']: ${JSON.stringify(n['title'])}\ntags: ${JSON.stringify(tags)}\ncreated: ${JSON.stringify(n['created_at'])}\n['event_date']: ${JSON.stringify(n['event_date'] ?? null)}\nprivate: ${n['is_private']}\n---\n\n${n['content']}\n${n['enriched'] ? `\n## Approfondimento AI\n\n${n['enriched']}\n` : ''}\n${links.length ? `## Connessioni\n\n${links.map(l => `- [[${String(l?.['title'] || 'Senza titolo').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0,70)}--${l?.['id']}|${l?.['title']}]]`).join('\n')}` : ''}`;
+    const text = `---\ntitle: ${JSON.stringify(n['title'])}\ntags: ${JSON.stringify(tags)}\ncreated: ${JSON.stringify(n['created_at'])}\nevent_date: ${JSON.stringify(n['event_date'] ?? null)}\nprivate: ${n['is_private']}\n---\n\n${n['content']}\n${n['enriched'] ? `\n## Approfondimento AI\n\n${n['enriched']}\n` : ''}\n${links.length ? `## Connessioni\n\n${links.map(l => `- [[${String(l?.['title'] || 'Senza titolo').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0,70)}--${l?.['id']}|${l?.['title']}]]`).join('\n')}` : ''}`;
     files[`markdown/${filename}.md`] = strToU8(text);
   }
   return zipSync(files);
