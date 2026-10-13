@@ -15,6 +15,13 @@
       "when": 1791904192071,
       "tag": "0001_restore_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791904494474,
+      "tag": "0002_fix_archive_restore",
+      "breakpoints": true
     }
   ]
 }
