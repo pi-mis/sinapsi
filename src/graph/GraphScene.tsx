@@ -20,7 +20,7 @@ export default function GraphScene(props: Props) {
     <color attach="background" args={[colors.background]} />
     <ambientLight intensity={0.9} />
     <directionalLight position={[5, 8, 10]} intensity={2.2} color={colors.light} />
-    <Environment resolution={64}><Lightformer intensity={2} position={[0, 5, 0]} scale={[10, 10, 1]} /><Lightformer intensity={1.5} color={colors.colors[0]} position={[-5, 1, 3]} rotation-y={Math.PI / 2} scale={[8, 8, 1]} /></Environment>
+    <Environment resolution={64}><Lightformer intensity={2} position={[0, 5, 0]} scale={[10, 10, 1]} /><Lightformer intensity={1.5} color={colors.colors[0] ?? colors.light} position={[-5, 1, 3]} rotation-y={Math.PI / 2} scale={[8, 8, 1]} /></Environment>
     <Brain {...props} colors={colors} />
     <Controls {...props} />
   </Canvas>;

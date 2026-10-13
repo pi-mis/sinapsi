@@ -14,21 +14,21 @@ export function validateArchive(input: unknown): Archive {
     if (!Array.isArray(rows) || rows.length > 100000 || rows.some(r => !r || typeof r !== 'object' || Array.isArray(r))) throw new Error(`Dati mancanti o non validi: ${table}`);
     const seen = new Set();
     for (const row of rows) {
-      if ('id' in row && (typeof row.id !== 'string' || !uuid.test(row.id))) throw new Error('Identificatore non valido.');
-      const identity = row.id ?? (table === 'clusters' ? row.cluster_id : table === 'graph_settings' ? 'settings' : `${row.note_id}/${row.tag_id ?? row.entity_id}`);
+      if ('id' in row && (typeof row['id'] !== 'string' || !uuid.test(row['id']))) throw new Error('Identificatore non valido.');
+      const identity = row['id'] ?? (table === 'clusters' ? row['cluster_id'] : table === 'graph_settings' ? 'settings' : `${row['note_id']}/${row['tag_id'] ?? row['entity_id']}`);
       if (seen.has(identity)) throw new Error('L’archivio contiene dati duplicati.'); seen.add(identity);
     }
   }
-  const ids = (table: (typeof ARCHIVE_TABLES)[number]) => new Set(archive.tables[table].map(r => r.id));
+  const ids = (table: (typeof ARCHIVE_TABLES)[number]) => new Set(archive.tables[table].map(r => r['id']));
   const notes = ids('notes'), tags = ids('tags'), entities = ids('entities'), sources = ids('sources');
   for (const n of archive.tables.notes) {
-    if (typeof n.content !== 'string' || typeof n.title !== 'string' || typeof n.is_private !== 'boolean') throw new Error('Una nota contiene dati non validi.');
-    if (n.source_id && !sources.has(n.source_id)) throw new Error('Fonte della nota mancante.');
+    if (typeof n['content'] !== 'string' || typeof n['title'] !== 'string' || typeof n['is_private'] !== 'boolean') throw new Error('Una nota contiene dati non validi.');
+    if (n['source_id'] && !sources.has(n['source_id'])) throw new Error('Fonte della nota mancante.');
     for (const axis of ['pos_x','pos_y','pos_z']) if (n[axis] != null && (typeof n[axis] !== 'number' || !Number.isFinite(n[axis]))) throw new Error('Posizione della nota non valida.');
   }
-  for (const e of archive.tables.edges) if (!notes.has(e.a) || !notes.has(e.b)) throw new Error('Una connessione fa riferimento a una nota mancante.');
-  for (const link of archive.tables.note_tags) if (!notes.has(link.note_id) || !tags.has(link.tag_id)) throw new Error('Tag collegato mancante.');
-  for (const link of archive.tables.note_entities) if (!notes.has(link.note_id) || !entities.has(link.entity_id)) throw new Error('Entità collegata mancante.');
+  for (const e of archive.tables.edges) if (!notes.has(e['a']) || !notes.has(e['b'])) throw new Error('Una connessione fa riferimento a una nota mancante.');
+  for (const link of archive.tables.note_tags) if (!notes.has(link['note_id']) || !tags.has(link['tag_id'])) throw new Error('Tag collegato mancante.');
+  for (const link of archive.tables.note_entities) if (!notes.has(link['note_id']) || !entities.has(link['entity_id'])) throw new Error('Entità collegata mancante.');
   return archive;
 }
 export function createZip(archive: Archive) {
@@ -36,10 +36,10 @@ export function createZip(archive: Archive) {
   const files: Record<string, Uint8Array> = { 'notes.json': strToU8(JSON.stringify(archive, null, 2)) };
   const notes = archive.tables.notes;
   for (const n of notes) {
-    const tags = archive.tables.note_tags.filter(l => l.note_id === n.id).map(l => archive.tables.tags.find(t => t.id === l.tag_id)?.name).filter(Boolean);
-    const links = archive.tables.edges.filter(e => e.a === n.id || e.b === n.id).map(e => notes.find(other => other.id === (e.a === n.id ? e.b : e.a))).filter(Boolean);
-    const filename = `${String(n.title || 'Senza titolo').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 70)}--${n.id}`;
-    const text = `---\ntitle: ${JSON.stringify(n.title)}\ntags: ${JSON.stringify(tags)}\ncreated: ${JSON.stringify(n.created_at)}\nevent_date: ${JSON.stringify(n.event_date ?? null)}\nprivate: ${n.is_private}\n---\n\n${n.content}\n${n.enriched ? `\n## Approfondimento AI\n\n${n.enriched}\n` : ''}\n${links.length ? `## Connessioni\n\n${links.map(l => `- [[${String(l?.title || 'Senza titolo').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0,70)}--${l?.id}|${l?.title}]]`).join('\n')}` : ''}`;
+    const tags = archive.tables.note_tags.filter(l => l['note_id'] === n['id']).map(l => archive.tables.tags.find(t => t['id'] === l['tag_id'])?.name).filter(Boolean);
+    const links = archive.tables.edges.filter(e => e['a'] === n['id'] || e['b'] === n['id']).map(e => notes.find(other => other['id'] === (e['a'] === n['id'] ? e['b'] : e['a']))).filter(Boolean);
+    const filename = `${String(n['title'] || 'Senza titolo').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 70)}--${n['id']}`;
+    const text = `---\n['title']: ${JSON.stringify(n['title'])}\ntags: ${JSON.stringify(tags)}\ncreated: ${JSON.stringify(n['created_at'])}\n['event_date']: ${JSON.stringify(n['event_date'] ?? null)}\nprivate: ${n['is_private']}\n---\n\n${n['content']}\n${n['enriched'] ? `\n## Approfondimento AI\n\n${n['enriched']}\n` : ''}\n${links.length ? `## Connessioni\n\n${links.map(l => `- [[${String(l?.['title'] || 'Senza titolo').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0,70)}--${l?.['id']}|${l?.['title']}]]`).join('\n')}` : ''}`;
     files[`markdown/${filename}.md`] = strToU8(text);
   }
   return zipSync(files);
