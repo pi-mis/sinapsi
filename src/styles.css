@@ -50,19 +50,19 @@
 
 /* Single dark theme: the 3D scene lives on pure black. */
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.08 0 0);
-  --foreground: oklch(0.93 0.015 75);
+  --radius: 0.5rem;
+  --background: oklch(0.115 0.004 260);
+  --foreground: oklch(0.95 0.004 260);
   --card: oklch(0.13 0.004 70);
   --card-foreground: oklch(0.93 0.015 75);
   --popover: oklch(0.13 0.004 70);
   --popover-foreground: oklch(0.93 0.015 75);
-  --primary: oklch(0.82 0.12 70);
-  --primary-foreground: oklch(0.14 0.01 70);
+  --primary: oklch(0.8 0.09 195);
+  --primary-foreground: oklch(0.15 0.015 195);
   --secondary: oklch(0.19 0.006 70);
   --secondary-foreground: oklch(0.9 0.015 75);
   --muted: oklch(0.18 0.004 70);
-  --muted-foreground: oklch(0.62 0.015 75);
+  --muted-foreground: oklch(0.68 0.008 260);
   --accent: oklch(0.22 0.01 70);
   --accent-foreground: oklch(0.95 0.015 75);
   --destructive: oklch(0.62 0.2 25);
@@ -71,7 +71,17 @@
   --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.82 0.12 70 / 60%);
   --glow: oklch(0.85 0.13 70);
-  --panel: oklch(0.1 0.003 70 / 72%);
+  --panel: oklch(0.16 0.006 260 / 94%);
+  --graph-background: #080a0e;
+  --graph-1: #91c9c5;
+  --graph-2: #a9bce5;
+  --graph-3: #d4b88b;
+  --graph-4: #c3afd8;
+  --graph-5: #99c2a4;
+  --graph-6: #d4a7ab;
+  --graph-edge: #778391;
+  --graph-light: #f2f5f8;
+  --shadow-panel: 0 12px 48px oklch(0 0 0 / 35%);
   --chart-1: oklch(0.8 0.13 70);
   --chart-2: oklch(0.75 0.1 180);
   --chart-3: oklch(0.72 0.12 300);
@@ -111,7 +121,7 @@
 @utility label-mono {
   font-family: var(--font-mono);
   font-size: 0.68rem;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
@@ -120,3 +130,16 @@
   color: var(--glow);
   text-shadow: 0 0 18px color-mix(in oklch, var(--glow) 55%, transparent);
 }
+
+@utility panel-shadow {
+  box-shadow: var(--shadow-panel);
+}
+
+@layer base {
+  * { letter-spacing: 0; }
+  button, input, textarea, select { font: inherit; }
+  ::selection { background: var(--primary); color: var(--primary-foreground); }
+}
+
+.graph-label { pointer-events: none; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; color: var(--foreground); background: var(--panel); border: 1px solid var(--border); padding: 5px 9px; border-radius: 4px; font-size: 11px; box-shadow: var(--shadow-panel); }
+.graph-cluster-label { pointer-events: none; white-space: nowrap; color: var(--muted-foreground); font-size: 11px; }
