@@ -127,13 +127,13 @@ export async function seedDemo(userId: string) {
     const key = `${a}-${b}`;
     if (seen.has(key)) return;
     seen.add(key);
-    edges.push({ user_id: userId, a: notes[a].id, b: notes[b].id, score, kind });
+    edges.push({ user_id: userId, a: notes[a]!.id, b: notes[b]!.id, score, kind });
   };
   for (let c = 0; c < 6; c++) {
     for (let k = 0; k < 10; k++) {
       const i = c * 10 + k;
       const n = 2 + Math.floor(r() * 3);
-      for (let m = 0; m < n; m++) add(i, c * 10 + Math.floor(r() * 10), 0.45 + r() * 0.5, kinds[Math.floor(r() * 4)]);
+      for (let m = 0; m < n; m++) add(i, c * 10 + Math.floor(r() * 10), 0.45 + r() * 0.5, kinds[Math.floor(r() * 4)]!);
     }
   }
   for (let m = 0; m < 14; m++) add(Math.floor(r() * 60), Math.floor(r() * 60), 0.35 + r() * 0.15, "semantic");
@@ -143,7 +143,7 @@ export async function seedDemo(userId: string) {
     links: edges.map((e) => ({ source: e.a, target: e.b, score: e.score })),
   });
   const rows = notes.map((n) => {
-    const p = positions[n.id];
+    const p = positions[n.id] ?? [0, 0, 0];
     return { ...n, pos_x: p[0], pos_y: p[1], pos_z: p[2] };
   });
   const { error } = await supabase.from("notes").insert(rows);

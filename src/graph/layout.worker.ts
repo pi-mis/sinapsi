@@ -13,7 +13,8 @@ const RADIUS = 5;
 self.onmessage = (ev: MessageEvent<LayoutIn>) => {
   const { nodes, links, iterations = 300 } = ev.data;
   const sim = nodes.map((n) => {
-    const o: Record<string, unknown> = { id: n.id };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const o: any = { id: n.id };
     if (n.x != null) {
       o.x = n.x * 40;
       o.y = (n.y ?? 0) * 40;

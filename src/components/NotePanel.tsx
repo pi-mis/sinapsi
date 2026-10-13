@@ -34,7 +34,7 @@ export function NotePanel({
   const idx = data.nodes.findIndex((n) => n.id === id);
   const linked = data.edges
     .filter((e) => e.a === idx || e.b === idx)
-    .map((e) => ({ node: data.nodes[e.a === idx ? e.b : e.a], score: e.score, kind: e.kind }))
+    .map((e) => ({ node: data.nodes[e.a === idx ? e.b : e.a]!, score: e.score, kind: e.kind }))
     .sort((a, b) => b.score - a.score);
 
   return (

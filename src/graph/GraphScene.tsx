@@ -153,8 +153,8 @@ function Brain({ data, quality, reducedMotion, selectedId, onSelect }: Props) {
   const neighbors = useMemo(() => {
     const adj: number[][] = nodes.map(() => []);
     for (const e of edges) {
-      adj[e.a].push(e.b);
-      adj[e.b].push(e.a);
+      adj[e.a]!.push(e.b);
+      adj[e.b]!.push(e.a);
     }
     return adj;
   }, [nodes, edges]);
@@ -243,17 +243,17 @@ function Brain({ data, quality, reducedMotion, selectedId, onSelect }: Props) {
       source: new THREE.Color(0.8, 1, 0.85),
     };
     edges.forEach((e, i) => {
-      const A = nodes[e.a];
-      const B = nodes[e.b];
-      const tint = KIND_TINT[e.kind] ?? KIND_TINT.semantic;
+      const A = nodes[e.a]!;
+      const B = nodes[e.b]!;
+      const tint = KIND_TINT[e.kind] ?? KIND_TINT["semantic"]!;
       const ca = clusterColor(A.cluster, 0.4).lerp(tint, 0.5);
       const cb = clusterColor(B.cluster, 0.4).lerp(tint, 0.5);
       pos.set([A.x, A.y, A.z, B.x, B.y, B.z], i * 6);
       ca.toArray(col, i * 6);
       cb.toArray(col, i * 6 + 3);
       alpha[i * 2] = alpha[i * 2 + 1] = 0.05 + 0.3 * e.score;
-      seed[i * 2] = seeds[e.a];
-      seed[i * 2 + 1] = seeds[e.b];
+      seed[i * 2] = seeds[e.a]!;
+      seed[i * 2 + 1] = seeds[e.b]!;
       t[i * 2] = 0;
       t[i * 2 + 1] = 1;
       eSeed[i * 2] = eSeed[i * 2 + 1] = ((Math.sin(i * 78.233) * 43758.5453) % 1 + 1) % 1;
@@ -309,7 +309,7 @@ function Brain({ data, quality, reducedMotion, selectedId, onSelect }: Props) {
       (nd.array as Float32Array).fill(1);
       (ed.array as Float32Array).fill(1);
     } else {
-      const set = new Set([focus, ...neighbors[focus]]);
+      const set = new Set([focus, ...neighbors[focus]!]);
       for (let i = 0; i < nodes.length; i++) (nd.array as Float32Array)[i] = set.has(i) ? 1.15 : 0.15;
       edges.forEach((e, i) => {
         const on = e.a === focus || e.b === focus;
@@ -337,18 +337,18 @@ function Brain({ data, quality, reducedMotion, selectedId, onSelect }: Props) {
       nextBurst.current = t + 2 + Math.random();
       const i = Math.floor(Math.random() * nodes.length);
       boostStart[i] = t;
-      const A = nodes[i];
-      for (const j of neighbors[i]) {
-        const B = nodes[j];
+      const A = nodes[i]!;
+      for (const j of neighbors[i]!) {
+        const B = nodes[j]!;
         const d = Math.hypot(A.x - B.x, A.y - B.y, A.z - B.z);
-        boostStart[j] = Math.max(boostStart[j], t + 0.25 + d * 0.35);
+        boostStart[j] = Math.max(boostStart[j]!, t + 0.25 + d * 0.35);
       }
     }
     const attr = nodeGeo.getAttribute("aBoost") as THREE.InstancedBufferAttribute;
     const arr = attr.array as Float32Array;
     let changed = false;
     for (let i = 0; i < arr.length; i++) {
-      const dt = t - boostStart[i];
+      const dt = t - boostStart[i]!;
       const v = dt < 0 || dt > 1.5 ? 0 : Math.exp(-Math.pow((dt - 0.25) / 0.3, 2)) * (boostStart[i] === t ? 1 : 0.8);
       if (v !== arr[i]) {
         arr[i] = v;
@@ -358,7 +358,7 @@ function Brain({ data, quality, reducedMotion, selectedId, onSelect }: Props) {
     if (changed) attr.needsUpdate = true;
   });
 
-  const hovered = hover != null ? nodes[hover] : null;
+  const hovered = hover != null ? (nodes[hover] ?? null) : null;
 
   return (
     <group>
@@ -375,7 +375,7 @@ function Brain({ data, quality, reducedMotion, selectedId, onSelect }: Props) {
         onPointerOut={() => setHover(null)}
         onClick={(e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation();
-          if (e.instanceId != null) onSelect(nodes[e.instanceId].id);
+          if (e.instanceId != null) onSelect(nodes[e.instanceId]!.id);
         }}
       />
       {hovered && (
