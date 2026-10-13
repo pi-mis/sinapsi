@@ -325,12 +325,12 @@ function Brain({ data, quality, reducedMotion, selectedId, onSelect }: Props) {
   const nextBurst = useRef(2);
   useFrame((state) => {
     const t = state.clock.elapsedTime;
-    nodeMat.uniforms.uTime.value = t;
-    edgeMat.uniforms.uTime.value = t;
-    nodeMat.uniforms.uDrift.value = reducedMotion ? 0 : 1;
-    edgeMat.uniforms.uDrift.value = reducedMotion ? 0 : 1;
-    nodeMat.uniforms.uPulse.value = reducedMotion ? 0 : 1;
-    edgeMat.uniforms.uPulses.value = reducedMotion || quality >= 1 ? 0 : 1;
+    nodeMat.uniforms["uTime"]!.value = t;
+    edgeMat.uniforms["uTime"]!.value = t;
+    nodeMat.uniforms["uDrift"]!.value = reducedMotion ? 0 : 1;
+    edgeMat.uniforms["uDrift"]!.value = reducedMotion ? 0 : 1;
+    nodeMat.uniforms["uPulse"]!.value = reducedMotion ? 0 : 1;
+    edgeMat.uniforms["uPulses"]!.value = reducedMotion || quality >= 1 ? 0 : 1;
     if (reducedMotion || !nodes.length) return;
 
     if (t > nextBurst.current) {
@@ -421,7 +421,7 @@ function Nebulae({ data }: { data: GraphData }) {
           cy = c.y / c.n,
           cz = c.z / c.n;
         let v = 0;
-        for (const p of c.pts) v += (p[0] - cx) ** 2 + (p[1] - cy) ** 2 + (p[2] - cz) ** 2;
+        for (const p of c.pts) v += (p[0]! - cx) ** 2 + (p[1]! - cy) ** 2 + (p[2]! - cz) ** 2;
         const sd = Math.sqrt(v / c.n);
         return { cluster, pos: [cx, cy, cz] as [number, number, number], size: Math.max(1.2, sd * 3) };
       });
