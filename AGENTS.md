@@ -17,3 +17,4 @@
 - Server-side AI logic uses authenticated TanStack server functions (not Edge Functions), with providers confined to server-only modules to protect credentials.
 - Note CRUD and text search live in `src/notes/`; archive operations validate a versioned portable ZIP before a transactional restore to preserve graph relationships.
 - The graph uses on-demand rendering with user-driven camera motion and instanced nodes to keep navigation stable and edges sharp.
+- Phase 2 AI search reads at most the latest 100 non-private notes server-side; embedding-based retrieval belongs to subsequent AI phases.
