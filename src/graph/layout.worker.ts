@@ -45,7 +45,7 @@ self.onmessage = (ev: MessageEvent<LayoutIn>) => {
   for (const n of sim as { x: number; y: number; z: number }[]) {
     maxR = Math.max(maxR, Math.hypot(n.x, n.y, n.z));
   }
-  const s = RADIUS / maxR;
+  const s = nodes.some(n => n.fixed) ? 1 / 40 : RADIUS / maxR;
   const positions: LayoutOut["positions"] = {};
   for (const n of sim as { id: string; x: number; y: number; z: number }[]) {
     positions[n.id] = [n.x * s, n.y * s, n.z * s];

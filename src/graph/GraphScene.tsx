@@ -118,18 +118,12 @@ function Brain({ data, selectedId, onSelect, highlighted, colors }: Props & { co
     return geo;
   }, [data, colors, focus]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const labels = useMemo(() => {
-    const by = new Map<number, { x: number; y: number; z: number; count: number; type: string }>();
-    data.nodes.forEach(n => { const group = by.get(n.cluster) ?? { x: 0, y: 0, z: 0, count: 0, type: n.type }; group.x += n.x; group.y += n.y; group.z += n.z; group.count++; by.set(n.cluster, group); });
-    return [...by.entries()].filter(([, c]) => c.count > 2).slice(0, 12);
-  }, [data.nodes]);
-  const labelNodes = focus >= 0 ? data.nodes.filter((_, i) => active.has(i)).slice(0, 8) : [];
+  const focusedNode = focus >= 0 ? data.nodes[focus] : undefined;
   return <group>
     <lineSegments geometry={geometry}><lineBasicMaterial vertexColors transparent opacity={0.6} /></lineSegments>
     <instancedMesh ref={mesh} args={[undefined, undefined, data.nodes.length]} frustumCulled={false} onPointerOver={() => { document.body.style.cursor = "pointer"; }} onPointerOut={() => { setHover(null); document.body.style.cursor = "auto"; }} onPointerMove={(e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); if (e.instanceId != null) setHover(e.instanceId); }} onClick={(e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); const node = e.instanceId == null ? null : data.nodes[e.instanceId]; if (node && e.delta < 5) onSelect(node.id); }}>
       <sphereGeometry args={[1, 24, 16]} /><meshStandardMaterial roughness={0.24} metalness={0.35} />
     </instancedMesh>
-    {focus < 0 && labels.map(([id, c]) => <Html key={id} position={[c.x / c.count, c.y / c.count + 0.55, c.z / c.count]} center zIndexRange={[5, 0]}><div className="graph-cluster-label">{c.type} · {c.count}</div></Html>)}
-    {labelNodes.map(n => <Html key={n.id} position={[n.x, n.y + 0.22, n.z]} center zIndexRange={[8, 0]}><div className="graph-label">{n.title}</div></Html>)}
+    <Html position={focusedNode ? [focusedNode.x, focusedNode.y + 0.22, focusedNode.z] : [0, 0, 0]} center zIndexRange={[8, 0]}>{focusedNode && <div className="graph-label">{focusedNode.title}</div>}</Html>
   </group>;
 }
