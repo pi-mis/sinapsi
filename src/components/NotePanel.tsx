@@ -1,95 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import type { GraphData } from "@/graph/data";
-
-export function NotePanel({
-  id,
-  data,
-  onClose,
-  onSelect,
-}: {
-  id: string;
-  data: GraphData;
-  onClose: () => void;
-  onSelect: (id: string) => void;
-}) {
-  const { data: note, isLoading, error } = useQuery({
-    queryKey: ["note", id],
-    queryFn: async () => {
-      const { data: n, error: e } = await supabase
-        .from("notes")
-        .select("id,title,content,enriched,type,ai_status,created_at,open_count")
-        .eq("id", id)
-        .single();
-      if (e) throw new Error("Impossibile aprire la nota");
-      void supabase
-        .from("notes")
-        .update({ open_count: (n.open_count ?? 0) + 1, last_opened_at: new Date().toISOString() })
-        .eq("id", id);
-      return n;
-    },
-  });
-
-  const idx = data.nodes.findIndex((n) => n.id === id);
-  const linked = data.edges
-    .filter((e) => e.a === idx || e.b === idx)
-    .map((e) => ({ node: data.nodes[e.a === idx ? e.b : e.a]!, score: e.score, kind: e.kind }))
-    .sort((a, b) => b.score - a.score);
-
-  return (
-    <aside className="glass fixed inset-0 z-30 flex flex-col overflow-hidden md:inset-y-3 md:left-auto md:right-3 md:w-[400px] md:rounded-2xl animate-in slide-in-from-right-8 fade-in duration-300">
-      <header className="flex items-start justify-between gap-3 border-b border-border p-5">
-        <div className="min-w-0">
-          <div className="label-mono">{note?.type ?? "nota"}</div>
-          <h2 className="mt-1 text-xl font-light leading-snug text-foreground">
-            {note?.title || data.nodes[idx]?.title}
-          </h2>
-        </div>
-        <button onClick={onClose} aria-label="Chiudi" className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
-          <X className="h-4 w-4" />
-        </button>
-      </header>
-      <div className="flex-1 space-y-6 overflow-y-auto p-5">
-        {isLoading && <p className="text-sm text-muted-foreground">Caricamento…</p>}
-        {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
-        {note && (
-          <>
-            <section>
-              <div className="label-mono mb-2">Originale</div>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{note.content}</p>
-            </section>
-            <section>
-              <div className="label-mono mb-2">Versione AI</div>
-              {note.enriched ? (
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{note.enriched}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {note.ai_status === "pending" ? "In elaborazione…" : "Non ancora disponibile."}
-                </p>
-              )}
-            </section>
-          </>
-        )}
-        <section>
-          <div className="label-mono mb-2">Collegate ({linked.length})</div>
-          <ul className="space-y-1">
-            {linked.map((l) => (
-              <li key={l.node.id}>
-                <button
-                  onClick={() => onSelect(l.node.id)}
-                  className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                >
-                  <span className="truncate text-foreground/90">{l.node.title}</span>
-                  <span className="shrink-0 font-mono text-[0.7rem] text-muted-foreground">
-                    {l.kind} · {l.score.toFixed(2)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-    </aside>
-  );
+import { useQuery } from '@tanstack/react-query';
+import { X, Pencil, Trash2, LockKeyhole, Pin } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from './ui/button';
+import { readNote, deleteNote, type Note } from '@/notes/data';
+import type { GraphData } from '@/graph/data';
+import { toast } from 'sonner';
+export function NotePanel({ id, data, onClose, onSelect, onEdit, onDeleted }: { id: string; data: GraphData; onClose: () => void; onSelect: (id: string) => void; onEdit: (note: Note) => void; onDeleted: () => void }) {
+  const { data: note, isLoading, error } = useQuery({ queryKey: ['note', id], queryFn: () => readNote(id) });
+  const [confirm, setConfirm] = useState(false), [busy, setBusy] = useState(false);
+  const idx = data.nodes.findIndex(n => n.id === id);
+  const linked = data.edges.filter(e => e.a === idx || e.b === idx).flatMap(e => { const node = data.nodes[e.a === idx ? e.b : e.a]; return node ? [{ node, score: e.score }] : []; });
+  return <aside className="panel-shadow fixed inset-0 z-40 flex flex-col overflow-hidden border border-border bg-card md:inset-y-4 md:left-auto md:right-4 md:w-[380px] md:rounded-lg">
+    <header className="flex items-start justify-between gap-3 border-b border-border p-5"><div className="min-w-0"><div className="flex items-center gap-2 text-xs text-muted-foreground">{note?.type ?? 'nota'}{note?.is_private && <LockKeyhole className="size-3" />}{note?.pinned && <Pin className="size-3" />}</div><h2 className="mt-2 break-words text-xl font-light">{note?.title || data.nodes[idx]?.title}</h2></div><Button onClick={onClose} aria-label="Chiudi nota" size="icon" variant="ghost"><X /></Button></header>
+    <div className="flex-1 space-y-6 overflow-y-auto p-5">{isLoading && <p className="text-sm text-muted-foreground">Caricamento…</p>}{error && <p className="text-sm text-destructive">{(error as Error).message}</p>}{note && <><p className="text-xs text-muted-foreground">{new Date(note.created_at).toLocaleDateString('it-IT')}{note.event_date && ` · Evento: ${new Date(note.event_date).toLocaleDateString('it-IT')}`}</p><section><h3 className="mb-3 text-xs text-muted-foreground">Originale</h3><p className="whitespace-pre-wrap break-words text-sm leading-7">{note.content}</p></section>{note.enriched && <section><h3 className="mb-3 text-xs text-muted-foreground">Approfondimento AI</h3><p className="whitespace-pre-wrap break-words text-sm leading-7 text-muted-foreground">{note.enriched}</p></section>}</>}
+    <section><h3 className="mb-2 text-xs text-muted-foreground">Connessioni · {linked.length}</h3>{linked.map(l => <Button variant="ghost" className="h-auto w-full justify-start whitespace-normal py-2 text-left font-normal" key={l.node.id} onClick={() => onSelect(l.node.id)}>{l.node.title}</Button>)}</section></div>
+    {note && <footer className="border-t border-border p-4">{confirm ? <div className="space-y-3"><p className="text-sm">Eliminare questa nota e le sue connessioni?</p><div className="flex gap-2"><Button variant="ghost" onClick={() => setConfirm(false)}>Annulla</Button><Button variant="destructive" disabled={busy} onClick={async () => { setBusy(true); try { await deleteNote(id); toast.success('Nota eliminata'); onDeleted(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } }}>Elimina nota</Button></div></div> : <div className="flex justify-between"><Button variant="secondary" onClick={() => onEdit(note)}><Pencil />Modifica</Button><Button variant="ghost" size="icon" aria-label="Elimina nota" onClick={() => setConfirm(true)}><Trash2 /></Button></div>}</footer>}
+  </aside>;
 }

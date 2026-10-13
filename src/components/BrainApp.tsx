@@ -1,155 +1,57 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { LogOut, Sparkles } from "lucide-react";
-import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
-import { loadGraph } from "@/graph/data";
-import { seedDemo, clearDemo } from "@/graph/demo";
-import type { QualityLevel } from "@/graph/GraphScene";
-import { NotePanel } from "./NotePanel";
-
-const GraphScene = lazy(() => import("@/graph/GraphScene"));
-
-type QualityChoice = "auto" | "alta" | "media" | "bassa" | "lista";
-const LEVEL: Record<Exclude<QualityChoice, "auto" | "lista">, QualityLevel> = { alta: 0, media: 1, bassa: 2 };
-
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
+import { toast } from 'sonner';
+import { LogOut, Sparkles, Plus, Search, ArrowUp, X, Network, List, CalendarDays, Move, Rotate3D, Focus, ZoomIn, ZoomOut, Download, Upload, MoreHorizontal, LockKeyhole, Pin } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import { loadGraph } from '@/graph/data';
+import { seedDemo, clearDemo } from '@/graph/demo';
+import type { ViewCommand } from '@/graph/GraphScene';
+import { NotePanel } from './NotePanel';
+import { NoteEditor } from './NoteEditor';
+import { Button } from './ui/button';
+import { listNotes, type Note } from '@/notes/data';
+import { searchIdeas } from '@/notes/search.functions';
+import { exportArchive, readZip, restoreArchive, type Archive } from '@/notes/archive';
+const GraphScene = lazy(() => import('@/graph/GraphScene'));
 export function BrainApp({ session }: { session: Session }) {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["graph"], queryFn: loadGraph });
-  const [selected, setSelected] = useState<string | null>(null);
-  const [choice, setChoice] = useState<QualityChoice>("auto");
-  const [autoLevel, setAutoLevel] = useState<QualityLevel>(0);
-  const [busy, setBusy] = useState(false);
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const on = () => setReduced(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-
-  const level: QualityLevel = choice === "auto" || choice === "lista" ? autoLevel : LEVEL[choice];
-
-  const onFps = (fps: number) => {
-    if (choice !== "auto") return;
-    if (fps < 40) setAutoLevel((l) => (l < 3 ? ((l + 1) as QualityLevel) : l));
-  };
-
-  const toggleDemo = async () => {
-    setBusy(true);
-    try {
-      if (data?.demoCount) await clearDemo();
-      else await seedDemo(session.user.id);
-      setSelected(null);
-      await qc.invalidateQueries({ queryKey: ["graph"] });
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const sorted = useMemo(() => [...(data?.nodes ?? [])].sort((a, b) => b.weight - a.weight), [data]);
-
-  return (
-    <main className="fixed inset-0 bg-background">
-      {data && data.nodes.length > 0 && choice !== "lista" && (
-        <Suspense fallback={null}>
-          <GraphScene
-            data={data}
-            quality={level}
-            reducedMotion={reduced}
-            selectedId={selected}
-            onSelect={setSelected}
-            onFps={onFps}
-          />
-        </Suspense>
-      )}
-
-      {/* Top bar */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-4">
-        <div className="pointer-events-auto">
-          <div className="label-mono">Cervello digitale</div>
-          <div className="mt-1 font-mono text-xs text-muted-foreground">
-            {data ? `${data.nodes.length} note · ${data.edges.length} connessioni` : "…"}
-          </div>
-        </div>
-        <div className="pointer-events-auto flex items-center gap-2">
-          <select
-            aria-label="Qualità grafica"
-            value={choice}
-            onChange={(e) => setChoice(e.target.value as QualityChoice)}
-            className="glass h-8 rounded-md px-2 text-xs text-foreground"
-          >
-            <option value="auto">Qualità: auto</option>
-            <option value="alta">Alta</option>
-            <option value="media">Media</option>
-            <option value="bassa">Bassa</option>
-            <option value="lista">Solo lista</option>
-          </select>
-          <button
-            onClick={toggleDemo}
-            disabled={busy}
-            className="glass flex h-8 items-center gap-1.5 rounded-md px-3 text-xs text-foreground hover:bg-accent disabled:opacity-50"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            {busy ? "Attendi…" : data?.demoCount ? "Cancella demo" : "Modalità demo"}
-          </button>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            aria-label="Esci"
-            className="glass flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </header>
-
-      {isLoading && <Center>Risveglio il cervello…</Center>}
-      {error && <Center>{(error as Error).message}</Center>}
-      {data && data.nodes.length === 0 && (
-        <Center>
-          <p className="text-2xl font-extralight text-foreground">Il cervello è ancora buio.</p>
-          <p className="mt-2 text-sm text-muted-foreground">Accendi la modalità demo per vedere 60 note in 6 costellazioni.</p>
-          <button
-            onClick={toggleDemo}
-            disabled={busy}
-            className="pointer-events-auto mt-6 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-          >
-            {busy ? "Accendo…" : "Accendi la demo"}
-          </button>
-        </Center>
-      )}
-
-      {data && choice === "lista" && (
-        <div className="absolute inset-0 overflow-y-auto px-4 pb-10 pt-20">
-          <ul className="mx-auto max-w-2xl divide-y divide-border">
-            {sorted.map((n) => (
-              <li key={n.id}>
-                <button onClick={() => setSelected(n.id)} className="flex w-full justify-between gap-3 py-3 text-left hover:text-primary">
-                  <span className="truncate">{n.title}</span>
-                  <span className="label-mono shrink-0">{n.type}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {selected && data && (
-        <NotePanel id={selected} data={data} onClose={() => setSelected(null)} onSelect={setSelected} />
-      )}
-    </main>
-  );
-}
-
-function Center({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center text-sm text-muted-foreground">
-      {children}
-    </div>
-  );
+  const graph = useQuery({ queryKey: ['graph'], queryFn: loadGraph });
+  const notes = useQuery({ queryKey: ['notes'], queryFn: listNotes });
+  const [selected, setSelected] = useState<string | null>(null), [editor, setEditor] = useState<Note | 'new' | null>(null);
+  const [view, setView] = useState<'graph'|'list'|'timeline'>('graph'), [mode, setMode] = useState<'pan'|'orbit'>('pan');
+  const [command, setCommand] = useState<ViewCommand>({ action: 'reset', tick: 0 });
+  const [busy, setBusy] = useState(false), [menu, setMenu] = useState(false), [reduced, setReduced] = useState(false);
+  const [query, setQuery] = useState(''), [searchMode, setSearchMode] = useState<'keyword'|'ai'>('keyword'), [searching, setSearching] = useState(false);
+  const [result, setResult] = useState<Awaited<ReturnType<typeof searchIdeas>> | null>(null);
+  const [filter, setFilter] = useState('all'), [privateOnly, setPrivateOnly] = useState(false), [imported, setImported] = useState<Archive | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const search = useServerFn(searchIdeas);
+  useEffect(() => { const mq = window.matchMedia('(prefers-reduced-motion: reduce)'); const update = () => setReduced(mq.matches); update(); mq.addEventListener('change', update); return () => mq.removeEventListener('change', update); }, []);
+  const refresh = async () => { await Promise.all([qc.invalidateQueries({ queryKey: ['graph'] }), qc.invalidateQueries({ queryKey: ['notes'] }), qc.invalidateQueries({ queryKey: ['note'] })]); };
+  const toggleDemo = async () => { setBusy(true); try { if (graph.data?.demoCount) await clearDemo(); else await seedDemo(session.user.id); setSelected(null); await refresh(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } };
+  const rows = useMemo(() => (notes.data ?? []).filter(n => (filter === 'all' || n.type === filter) && (!privateOnly || n.is_private) && (!result || result.results.some(r => r.id === n.id))).sort((a,b) => view === 'timeline' ? (b.event_date ?? b.created_at).localeCompare(a.event_date ?? a.created_at) : Number(b.pinned) - Number(a.pinned)), [notes.data, filter, privateOnly, result, view]);
+  const move = (action: ViewCommand['action']) => setCommand(c => ({ action, tick: c.tick + 1 }));
+  return <main className="fixed inset-0 bg-background text-foreground">
+    {graph.data && graph.data.nodes.length > 0 && view === 'graph' && <Suspense fallback={<div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Apertura del grafo…</div>}><GraphScene data={graph.data} quality={0} reducedMotion={reduced} selectedId={selected} onSelect={setSelected} command={command} mode={mode} highlighted={result ? result.results.map(r => r.id) : null} /></Suspense>}
+    <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-background/90 px-5 py-4 backdrop-blur-xl">
+      <div className="pointer-events-auto"><h1 className="text-lg font-light">Cervello digitale</h1><p className="mt-1 font-mono text-[10px] text-muted-foreground">{graph.data ? `${graph.data.nodes.length} note · ${graph.data.edges.length} connessioni` : 'Caricamento…'}</p></div>
+      <div className="pointer-events-auto flex items-center gap-2"><nav className="flex border-r border-border pr-2" aria-label="Vista">{([{ value: 'graph', icon: Network, label: 'Grafo' }, { value: 'list', icon: List, label: 'Elenco' }, { value: 'timeline', icon: CalendarDays, label: 'Timeline' }] as const).map(v => <Button key={v.value} size="icon" variant={view === v.value ? 'secondary' : 'ghost'} title={v.label} aria-label={v.label} aria-pressed={view === v.value} onClick={() => setView(v.value)}><v.icon /></Button>)}</nav><Button onClick={() => setEditor('new')} size="sm"><Plus /><span className="hidden sm:inline">Nuova nota</span></Button><Button variant="ghost" size="icon" aria-label="Altre azioni" title="Altre azioni" onClick={() => setMenu(!menu)}><MoreHorizontal /></Button></div>
+      {menu && <div className="panel-shadow pointer-events-auto absolute right-4 top-[76px] w-56 rounded-lg border border-border bg-popover p-1"><Button variant="ghost" className="w-full justify-start" disabled={busy} onClick={toggleDemo}><Sparkles />{graph.data?.demoCount ? 'Rimuovi demo' : 'Carica demo'}</Button><Button variant="ghost" className="w-full justify-start" disabled={busy} onClick={async () => { setBusy(true); try { const count = await exportArchive(); toast.success(`Esportate ${count} note`); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); setMenu(false); } }}><Download />Esporta tutto</Button><Button variant="ghost" className="w-full justify-start" onClick={() => input.current?.click()}><Upload />Importa archivio</Button><Button variant="ghost" className="w-full justify-start" onClick={async () => { const { error } = await supabase.auth.signOut(); if (error) toast.error('Impossibile uscire.'); }}><LogOut />Esci</Button></div>}
+    </header>
+    <input ref={input} type="file" accept=".zip" className="hidden" aria-label="Importa archivio ZIP" onChange={async e => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; try { setImported(readZip(new Uint8Array(await file.arrayBuffer()))); setMenu(false); } catch (err) { toast.error((err as Error).message); } }} />
+    {graph.isLoading && <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Caricamento delle note…</div>}
+    {graph.error && <div className="absolute inset-0 flex flex-col items-center justify-center gap-4"><p className="text-sm text-muted-foreground">{graph.error.message}</p><Button variant="outline" onClick={() => graph.refetch()}>Riprova</Button></div>}
+    {graph.data?.nodes.length === 0 && <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-5"><Network className="size-9 text-muted-foreground" /><h2 className="text-2xl font-light">Le tue idee, uno spazio tutto loro.</h2><Button onClick={() => setEditor('new')}><Plus />Nuova nota</Button><Button variant="ghost" onClick={toggleDemo} disabled={busy}>Carica demo</Button></div>}
+    {view !== 'graph' && <div className="absolute inset-0 overflow-y-auto px-5 pb-36 pt-28"><div className="mx-auto max-w-3xl"><div className="mb-6 flex items-center justify-between gap-3"><h2 className="text-xl font-light">{view === 'timeline' ? 'Timeline' : 'Tutte le note'}</h2><div className="flex items-center gap-3"><select className="h-8 max-w-36 rounded-md border border-input bg-background px-2 text-xs" aria-label="Filtra per tipo" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">Tutti i tipi</option>{[...new Set(notes.data?.map(n => n.type))].map(t => <option key={t}>{t}</option>)}</select><label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={privateOnly} onChange={e => setPrivateOnly(e.target.checked)} />Private</label></div></div>{!rows.length && <p className="text-sm text-muted-foreground">Nessuna nota corrispondente.</p>}<ul className="divide-y divide-border">{rows.map(n => <li key={n.id}><Button variant="ghost" onClick={() => setSelected(n.id)} className="h-auto w-full justify-between gap-4 rounded-none px-1 py-4 text-left font-normal"><span className="min-w-0"><span className="block truncate text-sm">{n.title || 'Senza titolo'}</span><span className="mt-1 block text-xs text-muted-foreground">{n.type} · {new Date(view === 'timeline' ? n.event_date ?? n.created_at : n.created_at).toLocaleDateString('it-IT')}</span></span><span className="flex shrink-0 gap-2 text-muted-foreground">{n.is_private && <LockKeyhole />}{n.pinned && <Pin />}</span></Button></li>)}</ul></div></div>}
+    {view === 'graph' && <div className="absolute bottom-32 left-5 z-20 flex flex-col gap-1 rounded-md border border-border bg-panel p-1 panel-shadow"><Button size="icon" variant={mode === 'pan' ? 'secondary' : 'ghost'} aria-label="Sposta" title="Sposta" onClick={() => setMode('pan')}><Move /></Button><Button size="icon" variant={mode === 'orbit' ? 'secondary' : 'ghost'} aria-label="Ruota" title="Ruota" onClick={() => setMode('orbit')}><Rotate3D /></Button><div className="my-1 border-t border-border" /><Button size="icon" variant="ghost" aria-label="Zoom avanti" title="Zoom avanti" onClick={() => move('in')}><ZoomIn /></Button><Button size="icon" variant="ghost" aria-label="Zoom indietro" title="Zoom indietro" onClick={() => move('out')}><ZoomOut /></Button><Button size="icon" variant="ghost" aria-label="Centra grafo" title="Centra grafo" onClick={() => { setSelected(null); move('reset'); }}><Focus /></Button></div>}
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-4 pb-5 pt-3"><div className="pointer-events-auto mx-auto max-w-2xl">
+      {result && <div className="panel-shadow mb-2 max-h-[40dvh] overflow-y-auto rounded-lg border border-border bg-panel p-4"><div className="mb-2 flex items-center justify-between"><span className="text-xs text-muted-foreground">{result.error ? 'Ricerca' : `${result.results.length} idee trovate`}</span><Button size="icon" variant="ghost" aria-label="Chiudi risultati" onClick={() => setResult(null)}><X /></Button></div>{result.error && <p className="text-sm text-destructive">{result.error}</p>}{result.answer && <p className="mb-3 whitespace-pre-wrap text-sm leading-6">{result.answer}</p>}{!result.error && !result.answer && !result.results.length && <p className="text-sm text-muted-foreground">Nessuna idea trovata.</p>}{result.results.map(r => <Button key={r.id} variant="ghost" className="h-auto w-full justify-between whitespace-normal py-2 text-left font-normal" onClick={() => setSelected(r.id)}><span>{r.title}</span><span className="ml-3 shrink-0 text-xs text-muted-foreground">{r.type}</span></Button>)}</div>}
+      <form className="panel-shadow flex items-center gap-2 rounded-lg border border-border bg-panel p-2" onSubmit={async e => { e.preventDefault(); if (!query.trim() || searching) return; setSearching(true); try { setResult(await search({ data: { query, mode: searchMode } })); } catch { toast.error('Ricerca non disponibile. Riprova.'); } finally { setSearching(false); } }}><Search className="ml-2 size-4 shrink-0 text-muted-foreground" /><input className="min-w-0 flex-1 bg-transparent px-1 py-3 text-sm outline-none" aria-label="Cerca idee" placeholder={searchMode === 'ai' ? 'Chiedi alle tue idee…' : 'Cerca tra le tue idee…'} value={query} onChange={e => { setQuery(e.target.value); if (!e.target.value) setResult(null); }} /><div className="flex shrink-0 border-l border-border pl-2"><Button type="button" variant={searchMode === 'keyword' ? 'secondary' : 'ghost'} size="sm" aria-pressed={searchMode === 'keyword'} onClick={() => setSearchMode('keyword')}>Parole</Button><Button type="button" variant={searchMode === 'ai' ? 'secondary' : 'ghost'} size="sm" aria-pressed={searchMode === 'ai'} onClick={() => setSearchMode('ai')}><Sparkles />AI</Button></div><Button type="submit" size="icon" aria-label="Avvia ricerca" disabled={searching || !query.trim()}>{searching ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <ArrowUp />}</Button></form>
+    </div></div>
+    {selected && graph.data && <NotePanel key={selected} id={selected} data={graph.data} onClose={() => setSelected(null)} onSelect={setSelected} onEdit={setEditor} onDeleted={() => { setSelected(null); setResult(null); void refresh(); }} />}
+    {editor && <NoteEditor {...(editor === 'new' ? {} : { note: editor })} onClose={() => setEditor(null)} onSaved={id => { setEditor(null); setSelected(id); setResult(null); void refresh(); }} />}
+    {imported && <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Conferma importazione"><div className="panel-shadow w-full max-w-md space-y-5 rounded-lg border border-border bg-card p-6"><h2 className="text-xl font-light">Importa archivio</h2><p className="text-sm text-muted-foreground">{imported.tables.notes.length} note e {imported.tables.edges.length} connessioni verificate. Le note già presenti nello stesso archivio saranno ripristinate, senza duplicati.</p><div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setImported(null)}>Annulla</Button><Button disabled={busy} onClick={async () => { setBusy(true); try { const count = await restoreArchive(imported); setImported(null); setSelected(null); setResult(null); await refresh(); toast.success(`Ripristinate ${count} note`); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } }}>{busy ? 'Importazione…' : 'Importa'}</Button></div></div></div>}
+  </main>;
 }
