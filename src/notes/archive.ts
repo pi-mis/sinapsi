@@ -56,7 +56,11 @@ export async function exportArchive() {
   await Promise.all(ARCHIVE_TABLES.map(async table => {
     const rows: Row[] = [];
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await supabase.from(table).select('*').range(from, from + 999);
+      const order = table === 'clusters' ? 'cluster_id' : table === 'graph_settings' ? 'user_id' : table === 'note_tags' || table === 'note_entities' ? 'note_id' : 'id';
+      let request = supabase.from(table).select('*').order(order);
+      if (table === 'note_tags') request = request.order('tag_id');
+      if (table === 'note_entities') request = request.order('entity_id');
+      const { data, error } = await request.range(from, from + 999);
       if (error) throw new Error('Impossibile esportare tutte le note.');
       rows.push(...data as unknown as Row[]); if (data.length < 1000) break;
     }
