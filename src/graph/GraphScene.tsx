@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Html, Environment, Lightformer } from "@react-three/drei";
+import { OrbitControls, Environment, Lightformer } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -16,14 +16,15 @@ function palette() {
 
 export default function GraphScene(props: Props) {
   const colors = useMemo(palette, []);
-  return <Canvas dpr={props.quality === 2 ? [1, 1.5] : [1, 2]} frameloop="demand" camera={{ position: [0, 0, 14], fov: 42, near: 0.01, far: 500 }} gl={{ antialias: true, powerPreference: "high-performance" }} onPointerMissed={() => props.onSelect(null)}>
+  const [hoverTitle, setHoverTitle] = useState<string | null>(null);
+  return <div className="absolute inset-0"><Canvas dpr={props.quality === 2 ? [1, 1.5] : [1, 2]} frameloop="demand" camera={{ position: [0, 0, 14], fov: 42, near: 0.01, far: 500 }} gl={{ antialias: true, powerPreference: "high-performance" }} onPointerMissed={() => props.onSelect(null)}>
     <color attach="background" args={[colors.background]} />
     <ambientLight intensity={0.9} />
     <directionalLight position={[5, 8, 10]} intensity={2.2} color={colors.light} />
-    <Environment resolution={64}><Lightformer intensity={2} position={[0, 5, 0]} scale={[10, 10, 1]} /><Lightformer intensity={1.5} color={colors.colors[0]} position={[-5, 1, 3]} rotation-y={Math.PI / 2} scale={[8, 8, 1]} /></Environment>
-    <Brain {...props} colors={colors} />
+    <Environment resolution={64}><Lightformer intensity={2} position={[0, 5, 0]} scale={[10, 10, 1]} /><Lightformer intensity={1.5} color={colors.colors[0] ?? colors.light} position={[-5, 1, 3]} rotation-y={Math.PI / 2} scale={[8, 8, 1]} /></Environment>
+    <Brain {...props} colors={colors} onHoverTitle={setHoverTitle} />
     <Controls {...props} />
-  </Canvas>;
+  </Canvas>{hoverTitle && <div className="pointer-events-none absolute left-1/2 top-36 z-10 max-w-[80%] -translate-x-1/2 rounded-md border border-border bg-panel px-3 py-2 text-xs panel-shadow">{hoverTitle}</div>}</div>;
 }
 
 function Controls({ data, selectedId, reducedMotion, command, mode }: Props) {
@@ -75,7 +76,7 @@ function Controls({ data, selectedId, reducedMotion, command, mode }: Props) {
   return <OrbitControls ref={ref} makeDefault enableDamping dampingFactor={0.12} screenSpacePanning zoomToCursor minDistance={0.8} maxDistance={150} rotateSpeed={0.55} panSpeed={0.8} zoomSpeed={0.7} mouseButtons={{ LEFT: mode === "pan" ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: mode === "pan" ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN }} touches={{ ONE: mode === "pan" ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} onStart={() => { destination.current = null; }} />;
 }
 
-function Brain({ data, selectedId, onSelect, highlighted, colors }: Props & { colors: ReturnType<typeof palette> }) {
+function Brain({ data, selectedId, onSelect, highlighted, colors, onHoverTitle }: Props & { colors: ReturnType<typeof palette>; onHoverTitle: (title: string | null) => void }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const [hover, setHover] = useState<number | null>(null);
   const invalidate = useThree(s => s.invalidate);
@@ -118,18 +119,10 @@ function Brain({ data, selectedId, onSelect, highlighted, colors }: Props & { co
     return geo;
   }, [data, colors, focus]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const labels = useMemo(() => {
-    const by = new Map<number, { x: number; y: number; z: number; count: number; type: string }>();
-    data.nodes.forEach(n => { const group = by.get(n.cluster) ?? { x: 0, y: 0, z: 0, count: 0, type: n.type }; group.x += n.x; group.y += n.y; group.z += n.z; group.count++; by.set(n.cluster, group); });
-    return [...by.entries()].filter(([, c]) => c.count > 2).slice(0, 12);
-  }, [data.nodes]);
-  const labelNodes = focus >= 0 ? data.nodes.filter((_, i) => active.has(i)).slice(0, 8) : [];
   return <group>
     <lineSegments geometry={geometry}><lineBasicMaterial vertexColors transparent opacity={0.6} /></lineSegments>
-    <instancedMesh ref={mesh} args={[undefined, undefined, data.nodes.length]} frustumCulled={false} onPointerOver={() => { document.body.style.cursor = "pointer"; }} onPointerOut={() => { setHover(null); document.body.style.cursor = "auto"; }} onPointerMove={(e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); if (e.instanceId != null) setHover(e.instanceId); }} onClick={(e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); const node = e.instanceId == null ? null : data.nodes[e.instanceId]; if (node && e.delta < 5) onSelect(node.id); }}>
+    <instancedMesh ref={mesh} args={[undefined, undefined, data.nodes.length]} frustumCulled={false} onPointerOver={() => { document.body.style.cursor = "pointer"; }} onPointerOut={() => { setHover(null); onHoverTitle(null); document.body.style.cursor = "auto"; }} onPointerMove={(e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); if (e.instanceId != null) { setHover(e.instanceId); onHoverTitle(data.nodes[e.instanceId]?.title ?? null); } }} onClick={(e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); const node = e.instanceId == null ? null : data.nodes[e.instanceId]; if (node && e.delta < 5) onSelect(node.id); }}>
       <sphereGeometry args={[1, 24, 16]} /><meshStandardMaterial roughness={0.24} metalness={0.35} />
     </instancedMesh>
-    {focus < 0 && labels.map(([id, c]) => <Html key={id} position={[c.x / c.count, c.y / c.count + 0.55, c.z / c.count]} center zIndexRange={[5, 0]}><div className="graph-cluster-label">{c.type} · {c.count}</div></Html>)}
-    {labelNodes.map(n => <Html key={n.id} position={[n.x, n.y + 0.22, n.z]} center zIndexRange={[8, 0]}><div className="graph-label">{n.title}</div></Html>)}
   </group>;
 }

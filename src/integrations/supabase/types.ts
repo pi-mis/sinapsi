@@ -491,6 +491,7 @@ export type Database = {
           similarity: number
         }[]
       }
+      restore_archive: { Args: { payload: Json }; Returns: number }
     }
     Enums: {
       [_ in never]: never
