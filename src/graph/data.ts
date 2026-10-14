@@ -7,12 +7,26 @@ export type GNode = {
   type: string;
   weight: number;
   cluster: number;
+  /** Constellation hue (0–1) when the cluster has been named; null for demo/unclustered notes. */
+  hue: number | null;
   x: number;
   y: number;
   z: number;
 };
 export type GEdge = { a: number; b: number; score: number; kind: string };
-export type GraphData = { nodes: GNode[]; edges: GEdge[]; demoCount: number };
+export type Constellation = {
+  id: number;
+  label: string;
+  summary: string | null;
+  hue: number;
+  count: number;
+};
+export type GraphData = {
+  nodes: GNode[];
+  edges: GEdge[];
+  demoCount: number;
+  constellations: Constellation[];
+};
 
 const PAGE = 1000;
 
@@ -44,16 +58,35 @@ export async function loadGraph(): Promise<GraphData> {
     is_demo: boolean;
   };
   type ERow = { a: string; b: string; score: number; kind: string };
-  const [rows, erows] = await Promise.all([
+  const [rows, erows, crows] = await Promise.all([
     fetchAll<NRow>("notes", "id,title,type,weight,cluster_id,pos_x,pos_y,pos_z,is_demo"),
     fetchAll<ERow>("edges", "a,b,score,kind"),
+    supabase.from("clusters").select("cluster_id,label,summary,hue,member_count"),
   ]);
+  const constellations: Constellation[] = (crows.data ?? [])
+    .filter((c) => c.hue != null)
+    .map((c) => ({
+      id: c.cluster_id,
+      label: c.label ?? `Costellazione ${c.cluster_id}`,
+      summary: c.summary,
+      hue: c.hue!,
+      count: c.member_count,
+    }))
+    .sort((a, b) => b.count - a.count);
+  const hueOf = new Map(constellations.map((c) => [c.id, c.hue]));
 
   // Layout only notes without saved positions; the rest stay fixed.
   const missing = rows.filter((r) => r.pos_x == null);
   if (missing.length) {
     const positions = await runLayout({
-      nodes: rows.map((r) => ({ id: r.id, x: r.pos_x, y: r.pos_y, z: r.pos_z, fixed: r.pos_x != null })),
+      nodes: rows.map((r) => ({
+        id: r.id,
+        x: r.pos_x,
+        y: r.pos_y,
+        z: r.pos_z,
+        fixed: r.pos_x != null,
+        cluster: r.cluster_id,
+      })),
       links: erows.map((e) => ({ source: e.a, target: e.b, score: e.score })),
       iterations: rows.length === missing.length ? 300 : 60,
     });
@@ -74,6 +107,7 @@ export async function loadGraph(): Promise<GraphData> {
       type: r.type,
       weight: r.weight,
       cluster: r.cluster_id ?? 0,
+      hue: r.cluster_id != null ? (hueOf.get(r.cluster_id) ?? null) : null,
       x: r.pos_x ?? 0,
       y: r.pos_y ?? 0,
       z: r.pos_z ?? 0,
@@ -85,5 +119,5 @@ export async function loadGraph(): Promise<GraphData> {
     const b = index.get(e.b);
     if (a != null && b != null) edges.push({ a, b, score: e.score, kind: e.kind });
   }
-  return { nodes, edges, demoCount: rows.filter((r) => r.is_demo).length };
+  return { nodes, edges, demoCount: rows.filter((r) => r.is_demo).length, constellations };
 }

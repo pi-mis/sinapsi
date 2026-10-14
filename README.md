@@ -1,6 +1,12 @@
-# Pixel Perfect Pixels
+# Sinapsi
 
-Implement exactly the screenshot and nothing else
+Un cervello digitale: note, ricordi e progetti come neuroni in uno spazio 3D, collegati per significato da un'AI che risponde solo usando la tua memoria.
+
+## AI
+
+- Embeddings calcolati nel browser (Transformers.js, `multilingual-e5-small`): gratuiti e senza inviare testo a terzi.
+- Risposte, nomi delle costellazioni e spiegazioni dei collegamenti via [Groq](https://console.groq.com) con modelli open-weight. Serve il secret `GROQ_API_KEY` (in Lovable Cloud e, per lo sviluppo locale, in un file `.env.local` non versionato).
+- Le note private non vengono mai inviate a Groq.
 
 This project was built with [Lovable](https://lovable.dev).
 

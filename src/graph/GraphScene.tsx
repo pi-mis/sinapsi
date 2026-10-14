@@ -3,7 +3,7 @@ import { OrbitControls, Environment, Lightformer } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import type { GraphData } from "./data";
+import type { GraphData, GNode } from "./data";
 
 export type QualityLevel = 0 | 1 | 2 | 3;
 export type ViewCommand = { action: "reset" | "in" | "out"; tick: number };
@@ -12,6 +12,12 @@ type Props = { data: GraphData; quality: QualityLevel; reducedMotion: boolean; s
 function palette() {
   const css = getComputedStyle(document.documentElement);
   return { background: css.getPropertyValue("--graph-background").trim(), edge: css.getPropertyValue("--graph-edge").trim(), light: css.getPropertyValue("--graph-light").trim(), colors: Array.from({ length: 6 }, (_, i) => css.getPropertyValue(`--graph-${i + 1}`).trim()) };
+}
+
+/** Constellation hue when known, otherwise the theme palette (demo and not-yet-clustered notes). */
+function nodeColor(n: GNode, colors: ReturnType<typeof palette>) {
+  if (n.hue != null) return new THREE.Color().setHSL(n.hue, 0.58, 0.64);
+  return new THREE.Color(colors.colors[((n.cluster % 6) + 6) % 6]);
 }
 
 export default function GraphScene(props: Props) {
@@ -94,7 +100,7 @@ function Brain({ data, selectedId, onSelect, highlighted, colors, onHoverTitle }
       const radius = (0.055 + n.weight * 0.1) * (i === focus ? 1.4 : 1);
       matrix.makeScale(radius, radius, radius).setPosition(n.x, n.y, n.z);
       mesh.current?.setMatrixAt(i, matrix);
-      const color = new THREE.Color(colors.colors[((n.cluster % 6) + 6) % 6]);
+      const color = nodeColor(n, colors);
       if ((active.size && !active.has(i)) || (matches && !matches.has(n.id))) color.multiplyScalar(0.24);
       mesh.current?.setColorAt(i, color);
     });
@@ -109,7 +115,7 @@ function Brain({ data, selectedId, onSelect, highlighted, colors, onHoverTitle }
       const a = data.nodes[e.a], b = data.nodes[e.b];
       if (!a || !b) return;
       positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
-      const color = new THREE.Color(focus >= 0 && (e.a === focus || e.b === focus) ? colors.colors[((a.cluster % 6) + 6) % 6] : colors.edge);
+      const color = focus >= 0 && (e.a === focus || e.b === focus) ? nodeColor(a, colors) : new THREE.Color(colors.edge);
       color.multiplyScalar(focus >= 0 && e.a !== focus && e.b !== focus ? 0.12 : 0.45 + e.score * 0.4);
       color.toArray(shades, shades.length); color.toArray(shades, shades.length);
     });

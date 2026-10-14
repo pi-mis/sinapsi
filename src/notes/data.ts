@@ -17,7 +17,7 @@ export async function readNote(id: string) {
 export type NoteInput = { title: string; content: string; type: string; is_private: boolean; pinned: boolean; event_date: string | null };
 export async function saveNote(input: NoteInput, id?: string) {
   if (!input.content.trim()) throw new Error('Scrivi il testo della nota.');
-  const value = { ...input, title: input.title.trim() || input.content.trim().split('\n')[0]?.slice(0, 80) || 'Senza titolo', ai_status: input.is_private ? 'skipped' : 'pending' };
+  const value = { ...input, title: input.title.trim() || input.content.trim().split('\n')[0]?.slice(0, 80) || 'Senza titolo', ai_status: 'pending' }; // embeddings are computed on-device, so private notes are linked too; they are never sent to Groq
   const query = id ? supabase.from('notes').update(value).eq('id', id) : supabase.from('notes').insert(value);
   const { data, error } = await query.select('id').single();
   if (error) throw new Error('La nota non è stata salvata. Il testo rimane disponibile.'); return data.id;
