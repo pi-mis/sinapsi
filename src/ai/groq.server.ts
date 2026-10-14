@@ -20,9 +20,9 @@ const DEFAULT_DAILY_CAP = 200;
 export class AiUnavailableError extends Error {}
 
 function groq() {
-  const apiKey = process.env["GROQ_API_KEY"];
+  const apiKey = process.env["GROQ_API_KEY_SINAPSI"] ?? process.env["GROQ_API_KEY"];
   if (!apiKey)
-    throw new AiUnavailableError("L'AI non è configurata: manca il secret GROQ_API_KEY.");
+    throw new AiUnavailableError("L'AI non è configurata: manca il secret GROQ_API_KEY_SINAPSI.");
   return createOpenAICompatible({
     name: "groq",
     baseURL: "https://api.groq.com/openai/v1",

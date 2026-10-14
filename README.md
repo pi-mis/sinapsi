@@ -5,7 +5,7 @@ Un cervello digitale: note, ricordi e progetti come neuroni in uno spazio 3D, co
 ## AI
 
 - Embeddings calcolati nel browser (Transformers.js, `multilingual-e5-small`): gratuiti e senza inviare testo a terzi.
-- Risposte, nomi delle costellazioni e spiegazioni dei collegamenti via [Groq](https://console.groq.com) con modelli open-weight. Serve il secret `GROQ_API_KEY` (in Lovable Cloud e, per lo sviluppo locale, in un file `.env.local` non versionato).
+- Risposte, nomi delle costellazioni e spiegazioni dei collegamenti via [Groq](https://console.groq.com) con modelli open-weight. Serve il secret `GROQ_API_KEY_SINAPSI` (in Lovable Cloud e, per lo sviluppo locale, in un file `.env.local` non versionato).
 - Le note private non vengono mai inviate a Groq.
 
 This project was built with [Lovable](https://lovable.dev).
