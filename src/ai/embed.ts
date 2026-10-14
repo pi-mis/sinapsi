@@ -39,6 +39,19 @@ function getWorker(): Worker {
   return worker;
 }
 
+/** True on phones and tablets, where memory is tight and the 3D scene competes with the model. */
+export function isConstrainedDevice() {
+  return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+}
+
+/** Frees the model's memory (it reloads from the browser cache next time). */
+export function releaseModel() {
+  if (!worker || waiting.size) return;
+  worker.terminate();
+  worker = null;
+  emit({ ...progress, ready: false });
+}
+
 /** Subscribe to the one-off model download progress. */
 export function onModelProgress(listener: (p: ModelProgress) => void): () => void {
   listeners.add(listener);
@@ -59,10 +72,10 @@ function run(texts: string[]): Promise<number[][]> {
 }
 
 /** Embeds texts locally (normalised, 384 dims). Nothing leaves the device. */
-export async function embed(texts: string[]): Promise<number[][]> {
+export async function embed(texts: string[], chunk = 8): Promise<number[][]> {
   const out: number[][] = [];
-  for (let i = 0; i < texts.length; i += 8) {
-    const vectors = await run(texts.slice(i, i + 8));
+  for (let i = 0; i < texts.length; i += chunk) {
+    const vectors = await run(texts.slice(i, i + chunk));
     for (const v of vectors) {
       if (v.length !== MODEL_DIM) throw new Error("Dimensione del vettore inattesa.");
       out.push(v);

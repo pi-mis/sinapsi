@@ -20,7 +20,7 @@ type Extractor = (
 ) => Promise<{ tolist(): number[][] }>;
 type ProgressEvent = { status?: string; file?: string; loaded?: number; total?: number };
 type TransformersLib = {
-  env: { allowLocalModels: boolean };
+  env: { allowLocalModels: boolean; backends: { onnx: { wasm?: { numThreads?: number } } } };
   pipeline(
     task: "feature-extraction",
     model: string,
@@ -36,6 +36,8 @@ function load(): Promise<Extractor> {
   extractor ??= (async () => {
     const lib = (await import(/* @vite-ignore */ EMBED_LIB_URL)) as TransformersLib;
     lib.env.allowLocalModels = false;
+    // One thread: the page is not cross-origin isolated anyway, and it keeps memory low on phones.
+    if (lib.env.backends.onnx.wasm) lib.env.backends.onnx.wasm.numThreads = 1;
     const model = await lib.pipeline("feature-extraction", EMBED_MODEL, {
       dtype: "q8",
       device: "wasm",

@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { embed, noteText } from "./embed";
+import { embed, isConstrainedDevice, noteText } from "./embed";
 import { chooseK, hueForIndex, kmeans, representatives } from "./cluster";
 import {
   CLUSTER_ID_BASE,
@@ -88,10 +88,45 @@ async function linkNote(id: string, vector: string): Promise<number | null> {
   return data?.cluster_id ?? null;
 }
 
+/**
+ * Crash guard. If the tab dies while embedding (typically memory on a phone), the
+ * ids being processed are still in localStorage at the next opening: a group is
+ * retried one note at a time, and a single note that crashed again is set aside
+ * as 'error' instead of crashing the app on every start.
+ */
+const GUARD = "sinapsi-embedding-in-progress";
+function readGuard(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(GUARD) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function writeGuard(ids: string[] | null) {
+  try {
+    if (ids?.length) localStorage.setItem(GUARD, JSON.stringify(ids));
+    else localStorage.removeItem(GUARD);
+  } catch {
+    /* private mode: no guard */
+  }
+}
+
+export type PendingResult = { ok: string[]; setAside: number };
+
 /** Embeds and links every pending note. Returns the ids processed successfully. */
-export async function processPending(report: (step: PipelineStep) => void): Promise<string[]> {
+export async function processPending(report: (step: PipelineStep) => void): Promise<PendingResult> {
+  const crashed = readGuard();
+  writeGuard(null);
+  let setAside = 0;
+  if (crashed.length === 1) {
+    await supabase.from("notes").update({ ai_status: "error" }).eq("id", crashed[0]!);
+    setAside = 1;
+  }
+  // After a crash, or on a phone, notes go through the model one (or two) at a time.
+  const step = crashed.length > 1 ? 1 : isConstrainedDevice() ? 2 : 8;
   const total = await countPending();
-  if (!total) return [];
+  if (!total) return { ok: [], setAside };
   const ok: string[] = [];
   const seen = new Set<string>();
   let done = 0;
@@ -107,33 +142,61 @@ export async function processPending(report: (step: PipelineStep) => void): Prom
     const batch = (notes ?? []).filter((n) => !seen.has(n.id));
     if (!batch.length) break;
     batch.forEach((n) => seen.add(n.id));
-    const vectors = await embed(batch.map((n) => noteText(n.title, n.content, n.enriched)));
-    for (let i = 0; i < batch.length; i++) {
-      const note = batch[i]!;
-      try {
-        const vector = toPgVector(vectors[i]!);
-        const { error: upError } = await supabase
-          .from("notes")
-          .update({
-            embedding: vector,
-            weight: weightForContent(
-              note.title.length + note.content.length + (note.enriched?.length ?? 0),
-            ),
-            ai_status: "embedded",
-          })
-          .eq("id", note.id);
-        if (upError) throw upError;
-        const cluster = await linkNote(note.id, vector);
-        if (cluster != null)
-          await supabase.from("notes").update({ cluster_id: cluster }).eq("id", note.id);
-        ok.push(note.id);
-      } catch {
-        await supabase.from("notes").update({ ai_status: "error" }).eq("id", note.id);
+    for (let start = 0; start < batch.length; start += step) {
+      const group = batch.slice(start, start + step);
+      writeGuard(group.map((n) => n.id));
+      const vectors = await embed(
+        group.map((n) => noteText(n.title, n.content, n.enriched)),
+        step,
+      );
+      writeGuard(null);
+      for (let i = 0; i < group.length; i++) {
+        const note = group[i]!;
+        try {
+          const vector = toPgVector(vectors[i]!);
+          const { error: upError } = await supabase
+            .from("notes")
+            .update({
+              embedding: vector,
+              weight: weightForContent(
+                note.title.length + note.content.length + (note.enriched?.length ?? 0),
+              ),
+              ai_status: "embedded",
+            })
+            .eq("id", note.id);
+          if (upError) throw upError;
+          const cluster = await linkNote(note.id, vector);
+          if (cluster != null)
+            await supabase.from("notes").update({ cluster_id: cluster }).eq("id", note.id);
+          ok.push(note.id);
+        } catch (e) {
+          console.warn("[Sinapsi] collegamento non riuscito", note.id, e);
+          await supabase.from("notes").update({ ai_status: "error" }).eq("id", note.id);
+        }
+        report({ phase: "linking", done: ++done, total: Math.max(total, done) });
       }
-      report({ phase: "linking", done: ++done, total: Math.max(total, done) });
     }
   }
-  return ok;
+  return { ok, setAside };
+}
+
+/** Puts notes that failed back in the queue (the "Riprova" button). */
+export async function retryFailed(): Promise<number> {
+  const { data, error } = await supabase
+    .from("notes")
+    .update({ ai_status: "pending" })
+    .eq("ai_status", "error")
+    .select("id");
+  if (error) return 0;
+  return data.length;
+}
+
+export async function countFailed(): Promise<number> {
+  const { count } = await supabase
+    .from("notes")
+    .select("id", { count: "exact", head: true })
+    .eq("ai_status", "error");
+  return count ?? 0;
 }
 
 type EmbeddedRow = { id: string; title: string; is_private: boolean; embedding: string | null };

@@ -11,8 +11,9 @@
  * If connections feel too sparse or too dense, these are the knobs to turn.
  */
 export const EMBED_MODEL = "Xenova/multilingual-e5-small";
-export const EMBED_LIB_URL =
-  "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js";
+export const EMBED_LIB_URL: string =
+  import.meta.env["VITE_EMBED_LIB_URL"] ||
+  "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js";
 export const MODEL_DIM = 384;
 export const DB_DIM = 768;
 /** Characters of a note sent to the embedding model (e5-small reads ~512 tokens). */
