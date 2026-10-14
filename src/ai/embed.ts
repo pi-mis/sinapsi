@@ -71,8 +71,17 @@ export async function embed(texts: string[]): Promise<number[][]> {
   return out;
 }
 
-/** The text that represents a note for the embedding model. */
-export function noteText(title: string, content: string): string {
-  const text = `${title.trim()}\n${content.trim()}`.trim();
-  return text.length > EMBED_MAX_CHARS ? text.slice(0, EMBED_MAX_CHARS) : text;
+/**
+ * The text that represents a note for the embedding model: title, the note's own
+ * words, then what its attachments say. When both are long they share the budget.
+ */
+export function noteText(title: string, content: string, attachments?: string | null): string {
+  const head = title.trim();
+  const own = content.trim();
+  const extra = (attachments ?? "").trim();
+  const budget = Math.max(0, EMBED_MAX_CHARS - head.length - 2);
+  const ownShare = extra ? Math.max(Math.floor(budget / 2), budget - extra.length) : budget;
+  const ownPart = own.slice(0, ownShare);
+  const extraPart = extra.slice(0, Math.max(0, budget - ownPart.length));
+  return [head, ownPart, extraPart].filter(Boolean).join("\n");
 }

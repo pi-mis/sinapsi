@@ -98,7 +98,7 @@ export async function processPending(report: (step: PipelineStep) => void): Prom
   for (;;) {
     const { data: notes, error } = await supabase
       .from("notes")
-      .select("id,title,content")
+      .select("id,title,content,enriched")
       .in("ai_status", ["pending", "skipped"])
       .order("created_at")
       .limit(BATCH);
@@ -106,7 +106,7 @@ export async function processPending(report: (step: PipelineStep) => void): Prom
     const batch = (notes ?? []).filter((n) => !seen.has(n.id));
     if (!batch.length) break;
     batch.forEach((n) => seen.add(n.id));
-    const vectors = await embed(batch.map((n) => noteText(n.title, n.content)));
+    const vectors = await embed(batch.map((n) => noteText(n.title, n.content, n.enriched)));
     for (let i = 0; i < batch.length; i++) {
       const note = batch[i]!;
       try {
@@ -115,7 +115,9 @@ export async function processPending(report: (step: PipelineStep) => void): Prom
           .from("notes")
           .update({
             embedding: vector,
-            weight: weightForContent(note.title.length + note.content.length),
+            weight: weightForContent(
+              note.title.length + note.content.length + (note.enriched?.length ?? 0),
+            ),
             ai_status: "embedded",
           })
           .eq("id", note.id);

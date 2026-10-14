@@ -14,6 +14,12 @@
 - [x] Chat RAG: risponde solo dalla memoria, con citazioni
 - [ ] Verifica con note reali e taratura delle soglie in `src/ai/config.ts`
 
+# Fase 5 — Neuroni ricchi
+- [x] Allegati in storage privato: file, foto, PDF, testi, vocali registrati dall'app, link
+- [x] PDF e testi letti nel browser; foto descritte e vocali trascritti da Groq; link riassunti
+- [x] Il testo degli allegati entra in ricerca, embeddings, sinapsi e chat
+- [ ] Gli allegati nell'esportazione ZIP (oggi esporta solo i metadati e il testo estratto)
+
 # Fase 4 — Grafica
 - [x] Shader dei neuroni (bordo luminoso, nucleo, respiro) con alone e bloom
 - [x] Sinapsi curve con impulsi luminosi che viaggiano

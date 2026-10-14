@@ -23,6 +23,9 @@ export async function saveNote(input: NoteInput, id?: string) {
   if (error) throw new Error('La nota non è stata salvata. Il testo rimane disponibile.'); return data.id;
 }
 export async function deleteNote(id: string) {
+  // Attachments are not tied to the note by a foreign key: remove their files first.
+  const { purgeAttachments } = await import('@/attachments/attachments.functions');
+  await purgeAttachments({ data: { noteId: id } });
   const { error } = await supabase.from('notes').delete().eq('id', id);
   if (error) throw new Error('Impossibile eliminare la nota.');
 }

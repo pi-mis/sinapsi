@@ -13,16 +13,26 @@ export const GROQ_MODELS = {
   chat: "openai/gpt-oss-120b",
   /** Short, cheap tasks: constellation names, single-connection explanations. */
   fast: "openai/gpt-oss-20b",
+  /** The multimodal model Groq offers for images (preview). */
+  vision: "qwen/qwen3.8-27b",
+  /** Speech to text. */
+  transcription: "whisper-large-v3-turbo",
 } as const;
+type ChatModel = "chat" | "fast";
 
 const DEFAULT_DAILY_CAP = 200;
 
 export class AiUnavailableError extends Error {}
 
-function groq() {
+function groqKey() {
   const apiKey = process.env["GROQ_API_KEY_SINAPSI"] ?? process.env["GROQ_API_KEY"];
   if (!apiKey)
     throw new AiUnavailableError("L'AI non è configurata: manca il secret GROQ_API_KEY_SINAPSI.");
+  return apiKey;
+}
+
+function groq() {
+  const apiKey = groqKey();
   return createOpenAICompatible({
     name: "groq",
     baseURL: "https://api.groq.com/openai/v1",
@@ -57,7 +67,7 @@ function describe(error: unknown): string {
 export async function askGroq(
   client: SupabaseClient<Database>,
   options: {
-    model: keyof typeof GROQ_MODELS;
+    model: ChatModel;
     system: string;
     prompt: string;
     maxOutputTokens?: number;
@@ -81,6 +91,62 @@ export async function askGroq(
     if (error instanceof AiUnavailableError) throw error;
     throw new AiUnavailableError(describe(error));
   }
+}
+
+/** Describes an image (and transcribes any visible text) from a short-lived signed URL. */
+export async function describeImage(
+  client: SupabaseClient<Database>,
+  imageUrl: string,
+): Promise<string> {
+  const provider = groq();
+  await consumeQuota(client);
+  try {
+    const { text } = await generateText({
+      model: provider(GROQ_MODELS.vision),
+      maxRetries: 1,
+      maxOutputTokens: 700,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Descrivi in italiano questa immagine per un archivio personale di ricordi, in 2-4 frasi: cosa mostra, luogo o contesto se riconoscibili, persone (senza identificarle), oggetti importanti. Se contiene testo leggibile, trascrivilo alla fine dopo 'Testo:'. Non inventare dettagli.",
+            },
+            { type: "image", image: new URL(imageUrl) },
+          ],
+        },
+      ],
+    });
+    return text.trim();
+  } catch (error) {
+    throw new AiUnavailableError(describe(error));
+  }
+}
+
+/** Transcribes an audio file with Whisper on Groq; the file is read from a signed URL. */
+export async function transcribeAudio(
+  client: SupabaseClient<Database>,
+  audioUrl: string,
+): Promise<string> {
+  const apiKey = groqKey();
+  await consumeQuota(client);
+  const form = new FormData();
+  form.set("model", GROQ_MODELS.transcription);
+  form.set("url", audioUrl);
+  form.set("response_format", "json");
+  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+  if (response.status === 429)
+    throw new AiUnavailableError(
+      "Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto.",
+    );
+  if (!response.ok) throw new AiUnavailableError("Trascrizione non riuscita.");
+  const body = (await response.json()) as { text?: string };
+  return (body.text ?? "").trim();
 }
 
 /** Extracts the first JSON object from a model answer (models sometimes wrap it in prose). */

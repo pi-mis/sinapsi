@@ -27,3 +27,7 @@
 - Mobile: safe-area insets, 16px inputs (no iOS zoom), one-finger rotate on touch, constellation chips under the header.
 - Auth: email + password by default (sessions persist in localStorage), magic link and Google as alternatives; accounts created via link can add a password from the ⋯ menu.
 - Phase 2's "latest 100 notes" AI search has been replaced by the Phase 3 RAG search above.
+- Attachments (Phase 5) live in the existing `sources` table (`folder` = note id, `uri` = storage path or URL, `extracted_text` = what the AI can read) and in the private Storage bucket `attachments`, created on demand. Storage is touched only server-side with the service role, always scoped by the `<userId>/<noteId>/` path prefix checked in `src/attachments/kinds.ts`; clients upload through signed upload URLs and view through signed URLs. No Storage RLS migration is needed.
+- PDF and text files are read in the browser (pdf.js legacy build from jsDelivr); images go to Groq's vision model and audio to Whisper on Groq, links are fetched server-side and summarised. None of this is sent to Groq for private notes.
+- The attachments' text is concatenated into `notes.enriched` (full-text indexed) and the note is set back to `pending`, so files take part in embeddings, synapses, constellations and the RAG chat. Deleting a note first purges its attachments (no foreign key).
+
