@@ -142,4 +142,5 @@
 }
 
 .graph-label { will-change: transform; pointer-events: none; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; color: var(--foreground); background: var(--panel); border: 1px solid var(--border); padding: 5px 9px; border-radius: 4px; font-size: 11px; box-shadow: var(--shadow-panel); }
+.graph-near-label { pointer-events: none; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; color: var(--foreground); font-size: 11px; margin-top: 4px; text-shadow: 0 0 4px rgb(0 0 0), 0 0 10px rgb(0 0 0 / 90%); will-change: transform, opacity; }
 .graph-cluster-label { pointer-events: none; white-space: nowrap; color: var(--muted-foreground); font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; text-shadow: 0 0 12px rgb(0 0 0 / 90%), 0 0 24px currentColor; will-change: transform, opacity; }

@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { registerServiceWorker } from "@/lib/offline";
 
 function NotFoundComponent() {
   return (
@@ -20,7 +21,10 @@ function NotFoundComponent() {
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-extralight text-foreground">404</h1>
         <p className="mt-4 text-sm text-muted-foreground">Questa pagina non esiste.</p>
-        <Link to="/" className="mt-6 inline-block text-sm text-primary underline-offset-4 hover:underline">
+        <Link
+          to="/"
+          className="mt-6 inline-block text-sm text-primary underline-offset-4 hover:underline"
+        >
           Torna al cervello
         </Link>
       </div>
@@ -67,6 +71,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -97,6 +103,9 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />

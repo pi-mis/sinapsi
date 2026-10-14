@@ -10,6 +10,8 @@ import {
   DUST_VERTEX,
   HALO_FRAGMENT,
   HALO_VERTEX,
+  NEBULA_FRAGMENT,
+  NEBULA_VERTEX,
   NEURON_FRAGMENT,
   NEURON_VERTEX,
   SYNAPSE_FRAGMENT,
@@ -34,11 +36,14 @@ type Props = {
 };
 type Palette = ReturnType<typeof palette>;
 type Uniforms = Record<
-  "uTime" | "uFloat" | "uPulse" | "uBreath" | "uHalo" | "uPx",
+  "uTime" | "uFloat" | "uPulse" | "uBreath" | "uHalo" | "uPx" | "uDpr" | "uNebula" | "uLevel",
   { value: number }
 >;
 
 const SEGMENTS = 12;
+/** Above this many neurons, geometry gets lighter so thousands of notes stay fluid. */
+const LARGE_GRAPH = 1500;
+const NEAR_LABELS = 10;
 const FLOAT = 0.045;
 
 function palette() {
@@ -66,7 +71,16 @@ function phaseOf(id: string) {
   return ((h >>> 0) % 10000) / 10000;
 }
 
-const radiusOf = (n: GNode) => 0.06 + n.weight * 0.12;
+let sizeScale = 1;
+const radiusOf = (n: GNode) => (0.06 + n.weight * 0.12) * sizeScale;
+
+/**
+ * 1 for small graphs, down to 0.3 for thousands of neurons: light is additive,
+ * so dense graphs need dimmer, smaller glows to stay readable (and cheaper).
+ */
+function densityOf(count: number) {
+  return Math.min(1, Math.max(0.3, Math.sqrt(250 / Math.max(1, count))));
+}
 const isCoarse = () =>
   typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
@@ -74,8 +88,11 @@ export default function GraphScene(props: Props) {
   const colors = useMemo(palette, []);
   const mobile = useMemo(isCoarse, []);
   const [hoverTitle, setHoverTitle] = useState<string | null>(null);
+  const density = densityOf(props.data.nodes.length);
+  sizeScale = 0.7 + 0.3 * density;
   const labels = useLabels(props.data, props.selectedId);
   const labelEls = useRef<(HTMLDivElement | null)[]>([]);
+  const nearEls = useRef<(HTMLDivElement | null)[]>([]);
   return (
     <div
       className={`${props.className ?? "absolute inset-0"}${props.ambient ? " pointer-events-none" : ""}`}
@@ -89,12 +106,20 @@ export default function GraphScene(props: Props) {
       >
         <color attach="background" args={[colors.background]} />
         <Scene {...props} colors={colors} onHoverTitle={setHoverTitle} />
-        {!props.ambient && <LabelProjector labels={labels} elements={labelEls} />}
+        {!props.ambient && (
+          <LabelProjector
+            labels={labels}
+            elements={labelEls}
+            nodes={props.data.nodes}
+            selectedId={props.selectedId}
+            near={nearEls}
+          />
+        )}
         <Controls {...props} />
         <EffectComposer multisampling={mobile ? 0 : 4}>
           <Bloom
             mipmapBlur
-            intensity={0.95}
+            intensity={0.95 * (0.45 + 0.55 * density)}
             luminanceThreshold={0.5}
             luminanceSmoothing={0.25}
             radius={0.75}
@@ -104,6 +129,16 @@ export default function GraphScene(props: Props) {
       </Canvas>
       {!props.ambient && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+          {Array.from({ length: NEAR_LABELS }, (_, i) => (
+            <div
+              key={`near${i}`}
+              ref={(el) => {
+                nearEls.current[i] = el;
+              }}
+              className="graph-near-label absolute left-0 top-0"
+              style={{ opacity: 0 }}
+            />
+          ))}
           {labels.map((l, i) => (
             <div
               key={l.key}
@@ -143,7 +178,7 @@ function Controls({ data, selectedId, reducedMotion, command, mode, ambient }: P
     const aspect = size.width / size.height;
     // Portrait phones: fill more of the screen instead of fitting the full width with wide margins.
     const fitX = aspect < 0.8 ? 1.4 : 1.6;
-    const distance = Math.max(5, span.y * 1.45, (span.x * fitX) / aspect, span.z + 4);
+    const distance = Math.max(5, span.y * 1.6, (span.x * fitX) / aspect, span.z + 4);
     return { center, distance };
   }, [data.nodes, size.width, size.height]);
   const initial = useRef(false);
@@ -242,6 +277,7 @@ function Scene(props: Props & { colors: Palette; onHoverTitle: (title: string | 
   const { data, selectedId, highlighted, colors, reducedMotion, ambient } = props;
   const [hover, setHover] = useState<number | null>(null);
   const { size, viewport, camera, invalidate } = useThree();
+  const resolution = useMemo(() => ({ value: new THREE.Vector2(1, 1) }), []);
   const uniforms = useMemo<Uniforms>(
     () => ({
       uTime: { value: 0 },
@@ -250,9 +286,18 @@ function Scene(props: Props & { colors: Palette; onHoverTitle: (title: string | 
       uBreath: { value: 1 },
       uHalo: { value: 0.5 },
       uPx: { value: 600 },
+      uDpr: { value: 1 },
+      uNebula: { value: 0.16 },
+      uLevel: { value: 1 },
     }),
     [],
   );
+  useEffect(() => {
+    const density = densityOf(data.nodes.length);
+    uniforms.uHalo.value = 0.5 * density;
+    uniforms.uLevel.value = 0.35 + 0.65 * density;
+    invalidate();
+  }, [data.nodes.length, uniforms, invalidate]);
   useEffect(() => {
     uniforms.uFloat.value = reducedMotion ? 0 : FLOAT;
     uniforms.uPulse.value = reducedMotion ? 0 : 1;
@@ -262,8 +307,10 @@ function Scene(props: Props & { colors: Palette; onHoverTitle: (title: string | 
   useEffect(() => {
     const fov = ((camera as THREE.PerspectiveCamera).fov * Math.PI) / 180;
     uniforms.uPx.value = (size.height * viewport.dpr) / (2 * Math.tan(fov / 2));
+    uniforms.uDpr.value = viewport.dpr;
+    resolution.value.set(size.width / 2, size.height / 2);
     invalidate();
-  }, [size.height, viewport.dpr, camera, uniforms, invalidate]);
+  }, [size.width, size.height, viewport.dpr, camera, uniforms, resolution, invalidate]);
   useFrame((_, delta) => {
     if (!reducedMotion) uniforms.uTime.value += Math.min(delta, 0.05);
   });
@@ -301,11 +348,33 @@ function Scene(props: Props & { colors: Palette; onHoverTitle: (title: string | 
     [base, data.nodes, active, matches, focus],
   );
   const phases = useMemo(() => Float32Array.from(data.nodes, (n) => phaseOf(n.id)), [data.nodes]);
+  /** Per-synapse state: 0 normal, 1 dimmed, 2 touching the neuron in focus. */
+  const edgeState = useMemo(
+    () =>
+      Uint8Array.from(data.edges, (e) => {
+        if (focus >= 0) return e.a === focus || e.b === focus ? 2 : 1;
+        if (matches) {
+          const a = data.nodes[e.a]?.id,
+            b = data.nodes[e.b]?.id;
+          return a && b && matches.has(a) && matches.has(b) ? 0 : 1;
+        }
+        return 0;
+      }),
+    [data.edges, data.nodes, focus, matches],
+  );
 
   return (
     <group>
       <Dust uniforms={uniforms} animate={!reducedMotion} />
-      <Synapses data={data} colors={shaded} focus={focus} phases={phases} uniforms={uniforms} />
+      <Nebulae data={data} uniforms={uniforms} />
+      <Synapses
+        data={data}
+        colors={base}
+        state={edgeState}
+        phases={phases}
+        uniforms={uniforms}
+        resolution={resolution}
+      />
       <Halos data={data} colors={shaded} phases={phases} uniforms={uniforms} />
       <Neurons
         data={data}
@@ -346,10 +415,11 @@ function Neurons({
   const mesh = useRef<THREE.InstancedMesh>(null);
   const invalidate = useThree((s) => s.invalidate);
   const geometry = useMemo(() => {
-    const g = new THREE.SphereGeometry(1, 32, 24);
+    const light = data.nodes.length > LARGE_GRAPH || isCoarse();
+    const g = light ? new THREE.SphereGeometry(1, 18, 12) : new THREE.SphereGeometry(1, 32, 24);
     g.setAttribute("aPhase", new THREE.InstancedBufferAttribute(phases, 1));
     return g;
-  }, [phases]);
+  }, [phases, data.nodes.length]);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -405,7 +475,7 @@ function Neurons({
   );
 }
 
-/** Soft additive glow around each neuron; bloom does the rest. */
+/** Soft additive glow around each neuron; bloom does the rest. Colours update in place. */
 function Halos({
   data,
   colors,
@@ -417,32 +487,29 @@ function Halos({
   phases: Float32Array;
   uniforms: Uniforms;
 }) {
+  const invalidate = useThree((s) => s.invalidate);
   const geometry = useMemo(() => {
+    const n = data.nodes.length;
+    const pos = new Float32Array(n * 3),
+      size = new Float32Array(n);
+    data.nodes.forEach((node, i) => {
+      pos.set([node.x, node.y, node.z], i * 3);
+      size[i] = radiusOf(node) * 7;
+    });
     const g = new THREE.BufferGeometry();
-    g.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(
-        data.nodes.flatMap((n) => [n.x, n.y, n.z]),
-        3,
-      ),
-    );
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     g.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
-    g.setAttribute(
-      "aSize",
-      new THREE.Float32BufferAttribute(
-        data.nodes.map((n) => radiusOf(n) * 7),
-        1,
-      ),
-    );
-    g.setAttribute(
-      "aColor",
-      new THREE.Float32BufferAttribute(
-        colors.flatMap((c) => [c.r, c.g, c.b]),
-        3,
-      ),
-    );
+    g.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+    g.setAttribute("aColor", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
     return g;
-  }, [data.nodes, colors, phases]);
+  }, [data.nodes, phases]);
+  useLayoutEffect(() => {
+    const attr = geometry.getAttribute("aColor") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    colors.forEach((c, i) => arr.set([c.r, c.g, c.b], i * 3));
+    attr.needsUpdate = true;
+    invalidate();
+  }, [geometry, colors, invalidate]);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -465,37 +532,50 @@ function Halos({
   return <points geometry={geometry} material={material} frustumCulled={false} />;
 }
 
-/** Curved synapses that follow their neurons and carry travelling pulses. */
+/**
+ * Curved ribbons with real thickness that follow their neurons and carry pulses.
+ * The geometry is built once per graph; focus and search only rewrite `aState`.
+ */
 function Synapses({
   data,
   colors,
-  focus,
+  state,
   phases,
   uniforms,
+  resolution,
 }: {
   data: GraphData;
   colors: THREE.Color[];
-  focus: number;
+  state: Uint8Array;
   phases: Float32Array;
   uniforms: Uniforms;
+  resolution: { value: THREE.Vector2 };
 }) {
+  const invalidate = useThree((s) => s.invalidate);
+  const segments = data.edges.length > 4000 ? 8 : SEGMENTS;
+  const perEdge = segments * 4;
   const geometry = useMemo(() => {
-    const count = data.edges.length * SEGMENTS * 2;
-    const a = new Float32Array(count * 3),
+    const count = data.edges.length * perEdge;
+    const pos = new Float32Array(count * 3),
+      a = new Float32Array(count * 3),
       b = new Float32Array(count * 3),
       bend = new Float32Array(count * 3),
-      color = new Float32Array(count * 3);
-    const ph = new Float32Array(count * 2),
+      color = new Float32Array(count * 3),
+      ph = new Float32Array(count * 2),
       t = new Float32Array(count),
+      tn = new Float32Array(count),
+      side = new Float32Array(count),
       seed = new Float32Array(count),
       strength = new Float32Array(count),
-      position = new Float32Array(count * 3);
+      st = new Float32Array(count);
+    const index = new Uint32Array(data.edges.length * segments * 6);
     const dir = new THREE.Vector3(),
       perp = new THREE.Vector3(),
       perp2 = new THREE.Vector3(),
       up = new THREE.Vector3(0, 1, 0),
-      side = new THREE.Vector3();
-    let v = 0;
+      x = new THREE.Vector3(1, 0, 0);
+    let v = 0,
+      k = 0;
     data.edges.forEach((e, ei) => {
       const na = data.nodes[e.a],
         nb = data.nodes[e.b];
@@ -503,58 +583,147 @@ function Synapses({
       dir.set(nb.x - na.x, nb.y - na.y, nb.z - na.z);
       const len = dir.length();
       dir.normalize();
-      perp.crossVectors(dir, Math.abs(dir.y) > 0.9 ? side.set(1, 0, 0) : up).normalize();
+      perp.crossVectors(dir, Math.abs(dir.y) > 0.9 ? x : up).normalize();
       perp2.crossVectors(dir, perp);
-      const s = phaseOf(`${na.id}:${nb.id}`);
-      const angle = s * Math.PI * 2;
-      const k = len * (0.08 + 0.1 * s);
-      const bx = (perp.x * Math.cos(angle) + perp2.x * Math.sin(angle)) * k;
-      const by = (perp.y * Math.cos(angle) + perp2.y * Math.sin(angle)) * k;
-      const bz = (perp.z * Math.cos(angle) + perp2.z * Math.sin(angle)) * k;
-      const touches = focus >= 0 && (e.a === focus || e.b === focus);
-      const c = touches
-        ? colors[focus]!.clone().multiplyScalar(0.9)
-        : colors[e.a]!.clone()
-            .lerp(colors[e.b]!, 0.5)
-            .multiplyScalar(focus >= 0 ? 0.35 : 0.8);
-      const strengthValue = touches ? Math.min(1, e.score + 0.4) : e.score;
-      for (let i = 0; i < SEGMENTS; i++) {
-        for (const tt of [i / SEGMENTS, (i + 1) / SEGMENTS]) {
-          a.set([na.x, na.y, na.z], v * 3);
-          b.set([nb.x, nb.y, nb.z], v * 3);
-          position.set(
+      const sd = phaseOf(`${na.id}:${nb.id}`);
+      const angle = sd * Math.PI * 2;
+      const amount = len * (0.08 + 0.1 * sd);
+      const bx = (perp.x * Math.cos(angle) + perp2.x * Math.sin(angle)) * amount;
+      const by = (perp.y * Math.cos(angle) + perp2.y * Math.sin(angle)) * amount;
+      const bz = (perp.z * Math.cos(angle) + perp2.z * Math.sin(angle)) * amount;
+      const c = colors[e.a]!.clone().lerp(colors[e.b]!, 0.5);
+      const edgeSeed = (sd * 7.31 + ei * 0.618) % 1;
+      for (let i = 0; i < segments; i++) {
+        const t0 = i / segments,
+          t1 = (i + 1) / segments;
+        const first = v;
+        for (const [tt, other, sideValue] of [
+          [t0, t1, -1],
+          [t0, t1, 1],
+          [t1, t0, -1],
+          [t1, t0, 1],
+        ] as const) {
+          pos.set(
             [na.x + (nb.x - na.x) * tt, na.y + (nb.y - na.y) * tt, na.z + (nb.z - na.z) * tt],
             v * 3,
           );
+          a.set([na.x, na.y, na.z], v * 3);
+          b.set([nb.x, nb.y, nb.z], v * 3);
           bend.set([bx, by, bz], v * 3);
           color.set([c.r, c.g, c.b], v * 3);
           ph.set([phases[e.a]!, phases[e.b]!], v * 2);
           t[v] = tt;
-          seed[v] = (s * 7.31 + ei * 0.618) % 1;
-          strength[v] = strengthValue;
+          tn[v] = other;
+          side[v] = sideValue;
+          seed[v] = edgeSeed;
+          strength[v] = e.score;
           v++;
         }
+        index.set([first, first + 1, first + 2, first + 2, first + 1, first + 3], k);
+        k += 6;
       }
     });
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     g.setAttribute("aA", new THREE.BufferAttribute(a, 3));
     g.setAttribute("aB", new THREE.BufferAttribute(b, 3));
     g.setAttribute("aBend", new THREE.BufferAttribute(bend, 3));
     g.setAttribute("aColor", new THREE.BufferAttribute(color, 3));
     g.setAttribute("aPhases", new THREE.BufferAttribute(ph, 2));
     g.setAttribute("aT", new THREE.BufferAttribute(t, 1));
+    g.setAttribute("aTn", new THREE.BufferAttribute(tn, 1));
+    g.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
     g.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
     g.setAttribute("aStrength", new THREE.BufferAttribute(strength, 1));
-    g.setDrawRange(0, v);
+    g.setAttribute("aState", new THREE.BufferAttribute(st, 1));
+    g.setIndex(new THREE.BufferAttribute(index.subarray(0, k), 1));
     return g;
-  }, [data, colors, focus, phases]);
+  }, [data, colors, phases, segments, perEdge]);
+  useLayoutEffect(() => {
+    const attr = geometry.getAttribute("aState") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    for (let e = 0; e < state.length; e++) arr.fill(state[e]!, e * perEdge, (e + 1) * perEdge);
+    attr.needsUpdate = true;
+    invalidate();
+  }, [geometry, state, perEdge, invalidate]);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        uniforms: { uTime: uniforms.uTime, uFloat: uniforms.uFloat, uPulse: uniforms.uPulse },
+        uniforms: {
+          uTime: uniforms.uTime,
+          uFloat: uniforms.uFloat,
+          uPulse: uniforms.uPulse,
+          uLevel: uniforms.uLevel,
+          uDpr: uniforms.uDpr,
+          uResolution: resolution,
+        },
         vertexShader: SYNAPSE_VERTEX,
         fragmentShader: SYNAPSE_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      }),
+    [uniforms, resolution],
+  );
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  return <mesh geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+/** One glowing cloud per constellation: the brain reads as nebulae from afar. */
+function Nebulae({ data, uniforms }: { data: GraphData; uniforms: Uniforms }) {
+  const geometry = useMemo(() => {
+    const groups = data.constellations.flatMap((c) => {
+      const members = data.nodes.filter((n) => n.cluster === c.id);
+      if (members.length < 3) return [];
+      const centre = members
+        .reduce((s, n) => s.add(new THREE.Vector3(n.x, n.y, n.z)), new THREE.Vector3())
+        .divideScalar(members.length);
+      const spread = Math.sqrt(
+        members.reduce(
+          (s, n) => s + centre.distanceToSquared(new THREE.Vector3(n.x, n.y, n.z)),
+          0,
+        ) / members.length,
+      );
+      return [
+        {
+          centre,
+          size: Math.max(1.2, spread * 3.2),
+          color: new THREE.Color().setHSL(c.hue, 0.7, 0.55),
+        },
+      ];
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(
+        groups.flatMap((x) => x.centre.toArray()),
+        3,
+      ),
+    );
+    g.setAttribute(
+      "aSize",
+      new THREE.Float32BufferAttribute(
+        groups.map((x) => x.size),
+        1,
+      ),
+    );
+    g.setAttribute(
+      "aColor",
+      new THREE.Float32BufferAttribute(
+        groups.flatMap((x) => x.color.toArray()),
+        3,
+      ),
+    );
+    return g;
+  }, [data.constellations, data.nodes]);
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: { uPx: uniforms.uPx, uNebula: uniforms.uNebula },
+        vertexShader: NEBULA_VERTEX,
+        fragmentShader: NEBULA_FRAGMENT,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
@@ -563,7 +732,7 @@ function Synapses({
   );
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => material.dispose(), [material]);
-  return <lineSegments geometry={geometry} material={material} frustumCulled={false} />;
+  return <points geometry={geometry} material={material} frustumCulled={false} renderOrder={-1} />;
 }
 
 /** Faint twinkling dust far behind the brain, for depth. */
@@ -655,19 +824,30 @@ function useLabels(data: GraphData, selectedId: string | null): Label[] {
   }, [data.constellations, data.nodes, selectedId]);
 }
 
+const NEAR_DISTANCE = 4.5;
+
 /**
  * Projects label anchors to the screen every frame and moves plain DOM nodes,
- * without React re-renders or extra React roots.
+ * without React re-renders or extra React roots. Level of detail: constellation
+ * names fade out up close, while the titles of the nearest neurons fade in.
  */
 function LabelProjector({
   labels,
   elements,
+  nodes,
+  selectedId,
+  near,
 }: {
   labels: Label[];
   elements: React.MutableRefObject<(HTMLDivElement | null)[]>;
+  nodes: GNode[];
+  selectedId: string | null;
+  near: React.MutableRefObject<(HTMLDivElement | null)[]>;
 }) {
   const { camera, size } = useThree();
   const v = useMemo(() => new THREE.Vector3(), []);
+  const tick = useRef(0);
+  const chosen = useRef<{ index: number; distance: number }[]>([]);
   useFrame(() => {
     labels.forEach((l, i) => {
       const el = elements.current[i];
@@ -678,12 +858,43 @@ function LabelProjector({
       const y = ((1 - v.y) / 2) * size.height;
       const depth = camera.position.distanceTo(l.position);
       el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
-      el.style.opacity = behind
-        ? "0"
-        : l.kind === "node"
-          ? "1"
-          : String(Math.max(0.35, Math.min(0.95, 14 / depth)));
+      const far = Math.max(0.35, Math.min(0.95, 14 / depth));
+      const close = Math.min(1, Math.max(0, (depth - 2.2) / 2.5));
+      el.style.opacity = behind ? "0" : l.kind === "node" ? "1" : String(far * close);
     });
+
+    // Every few frames, pick the nearest visible neurons to name.
+    if (tick.current++ % 6 === 0) {
+      const found: { index: number; distance: number }[] = [];
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i]!;
+        if (n.id === selectedId) continue;
+        v.set(n.x, n.y, n.z);
+        const distance = camera.position.distanceTo(v);
+        if (distance > NEAR_DISTANCE) continue;
+        v.project(camera);
+        if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
+        found.push({ index: i, distance });
+      }
+      chosen.current = found.sort((a, b) => a.distance - b.distance).slice(0, NEAR_LABELS);
+    }
+    for (let k = 0; k < NEAR_LABELS; k++) {
+      const el = near.current[k];
+      if (!el) continue;
+      const pick = chosen.current[k];
+      const n = pick ? nodes[pick.index] : undefined;
+      if (!pick || !n) {
+        el.style.opacity = "0";
+        continue;
+      }
+      if (el.dataset["id"] !== n.id) {
+        el.dataset["id"] = n.id;
+        el.textContent = n.title;
+      }
+      v.set(n.x, n.y - radiusOf(n) - 0.05, n.z).project(camera);
+      el.style.transform = `translate(${((v.x + 1) / 2) * size.width}px, ${((1 - v.y) / 2) * size.height}px) translate(-50%, 0)`;
+      el.style.opacity = String(Math.min(0.9, Math.max(0, (NEAR_DISTANCE - pick.distance) / 1.6)));
+    }
   });
   return null;
 }

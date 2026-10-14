@@ -36,6 +36,8 @@ export function usePipeline(
       again.current = true;
       return 0;
     }
+    // Offline the model and the database are out of reach: nothing to do until "online".
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return 0;
     running.current = true;
     const report = (step: PipelineStep) => setStatus({ kind: "busy", ...step });
     let groups = 0;

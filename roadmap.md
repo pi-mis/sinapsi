@@ -39,10 +39,12 @@
 - [ ] Notifiche push e Telegram anche ad app chiusa (serve un job programmato)
 - [ ] Altri connettori: Notion, Google Drive, email
 
-# Fase 4 — Grafica
+# Fase 4 e 8 — Grafica e scala
 - [x] Shader dei neuroni (bordo luminoso, nucleo, respiro) con alone e bloom
 - [x] Sinapsi curve con impulsi luminosi che viaggiano
-- [ ] Sinapsi con spessore reale (oggi linee da 1px con bagliore)
+- [x] Sinapsi con spessore reale (nastri che restano nitidi a ogni zoom)
 - [x] Fluttuazione via GPU, polvere stellare, nomi delle costellazioni nello spazio
-- [ ] Livelli di dettaglio per migliaia di note (nebulose → neuroni → etichette)
+- [x] Livelli di dettaglio per migliaia di note (nebulose → neuroni → etichette dei neuroni vicini)
+- [x] Luce adattiva alla densità: leggibile anche con 2000+ neuroni
+- [x] App installabile e consultabile offline (ultima copia salvata)
 - [x] Versione mobile e accesso con password

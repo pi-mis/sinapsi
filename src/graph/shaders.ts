@@ -88,51 +88,109 @@ void main() {
 }
 `;
 
+/**
+ * Synapses are ribbons with real thickness: each curve segment is a quad whose
+ * vertices are pushed sideways in screen space, so width stays crisp at any zoom.
+ * aState: 0 normal, 1 dimmed (something else is in focus), 2 highlighted.
+ */
 export const SYNAPSE_VERTEX = /* glsl */ `
 ${DRIFT}
+uniform vec2 uResolution;
+uniform float uDpr;
 attribute vec3 aA;
 attribute vec3 aB;
 attribute vec3 aBend;
 attribute vec2 aPhases;
 attribute float aT;
+attribute float aTn;
+attribute float aSide;
 attribute float aSeed;
 attribute float aStrength;
+attribute float aState;
 attribute vec3 aColor;
 varying float vT;
 varying float vSeed;
 varying float vStrength;
+varying float vSide;
+varying float vState;
 varying vec3 vColor;
+vec3 curve(vec3 a, vec3 b, vec3 c, float t) {
+  return (1.0 - t) * (1.0 - t) * a + 2.0 * (1.0 - t) * t * c + t * t * b;
+}
 void main() {
   vec3 a = aA + drift(aPhases.x);
   vec3 b = aB + drift(aPhases.y);
   vec3 c = (a + b) * 0.5 + aBend;
-  float t = aT;
-  vec3 p = (1.0 - t) * (1.0 - t) * a + 2.0 * (1.0 - t) * t * c + t * t * b;
-  vT = t;
+  mat4 mvp = projectionMatrix * modelViewMatrix;
+  vec4 here = mvp * vec4(curve(a, b, c, aT), 1.0);
+  vec4 there = mvp * vec4(curve(a, b, c, aTn), 1.0);
+  vec2 sh = here.xy / max(here.w, 1e-4) * uResolution;
+  vec2 st = there.xy / max(there.w, 1e-4) * uResolution;
+  vec2 dir = normalize((aTn > aT ? st - sh : sh - st) + vec2(1e-5, 0.0));
+  vec2 normal = vec2(-dir.y, dir.x);
+  float width = (0.7 + 2.4 * aStrength) * (aState > 1.5 ? 1.7 : 1.0) * uDpr;
+  here.xy += normal * aSide * width / uResolution * here.w;
+  vT = aT;
   vSeed = aSeed;
   vStrength = aStrength;
+  vSide = aSide;
+  vState = aState;
   vColor = aColor;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  gl_Position = here;
 }
 `;
 
 export const SYNAPSE_FRAGMENT = /* glsl */ `
 uniform float uTime;
 uniform float uPulse;
+uniform float uLevel;
 varying float vT;
 varying float vSeed;
 varying float vStrength;
+varying float vSide;
+varying float vState;
 varying vec3 vColor;
 void main() {
-  // Fade towards the neurons so synapses read as fibres, not wires.
+  // Soft edges across the ribbon, and fading towards the neurons so synapses read as fibres.
+  float across = 1.0 - smoothstep(0.35, 1.0, abs(vSide));
   float ends = smoothstep(0.0, 0.12, vT) * smoothstep(1.0, 0.88, vT);
-  float base = (0.16 + 0.55 * vStrength) * mix(0.55, 1.0, ends);
+  float level = vState > 1.5 ? 1.25 : vState > 0.5 ? 0.22 : 0.8;
+  float base = (0.14 + 0.5 * vStrength) * mix(0.55, 1.0, ends) * level * uLevel;
   // A signal travelling along the synapse, at a speed and offset of its own.
   float head = fract(uTime * (0.12 + 0.1 * fract(vSeed * 7.0)) + vSeed);
   float d = vT - head;
-  float pulse = exp(-d * d * 900.0) * uPulse * (0.6 + vStrength);
+  float pulse = exp(-d * d * 900.0) * uPulse * uLevel * (0.6 + vStrength) * (vState > 0.5 && vState < 1.5 ? 0.15 : 1.0);
   vec3 col = vColor * base + vColor * pulse * 2.6 + vec3(pulse * 0.5);
-  gl_FragColor = vec4(col, base + pulse);
+  gl_FragColor = vec4(col * across, (base + pulse) * across);
+  #include <colorspace_fragment>
+}
+`;
+
+/** A soft cloud of light per constellation, visible from afar and fading as you get close. */
+export const NEBULA_VERTEX = /* glsl */ `
+uniform float uPx;
+attribute float aSize;
+attribute vec3 aColor;
+varying vec3 vColor;
+varying float vFade;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  float dist = -mv.z;
+  gl_PointSize = clamp(aSize * uPx / dist, 0.0, 2048.0);
+  vFade = smoothstep(aSize * 0.9, aSize * 2.6, dist);
+  vColor = aColor;
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+export const NEBULA_FRAGMENT = /* glsl */ `
+uniform float uNebula;
+varying vec3 vColor;
+varying float vFade;
+void main() {
+  float d = length(gl_PointCoord - 0.5) * 2.0;
+  float a = exp(-d * d * 3.2) * (1.0 - smoothstep(0.8, 1.0, d)) * uNebula * vFade;
+  gl_FragColor = vec4(vColor * a, a);
   #include <colorspace_fragment>
 }
 `;

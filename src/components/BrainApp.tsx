@@ -29,6 +29,7 @@ import {
   Inbox,
   Bell,
   MessagesSquare,
+  WifiOff,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,11 +49,22 @@ import { syncConnectors } from "@/connectors/run";
 import { RemindersPanel, useReminders } from "./RemindersPanel";
 import { scanNotes } from "@/brain/client";
 import { groupOf, localToday, weekKey } from "@/brain/reminders";
+import { clearOffline, onOfflineCopy, withOffline } from "@/lib/offline";
 const GraphScene = lazy(() => import("@/graph/GraphScene"));
 export function BrainApp({ session }: { session: Session }) {
   const qc = useQueryClient();
-  const graph = useQuery({ queryKey: ["graph"], queryFn: loadGraph });
-  const notes = useQuery({ queryKey: ["notes"], queryFn: listNotes });
+  const graph = useQuery({ queryKey: ["graph"], queryFn: () => withOffline("graph", loadGraph) });
+  const notes = useQuery({ queryKey: ["notes"], queryFn: () => withOffline("notes", listNotes) });
+  const [offline, setOffline] = useState(false);
+  useEffect(() => onOfflineCopy(setOffline), []);
+  // Back online: reload everything and let the brain catch up.
+  useEffect(() => {
+    const back = () => {
+      void refresh().then(() => pipeline.run());
+    };
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [selected, setSelected] = useState<string | null>(null),
     [editor, setEditor] = useState<Note | "new" | null>(null);
   const [view, setView] = useState<"graph" | "list" | "timeline">("graph"),
@@ -353,6 +365,7 @@ export function BrainApp({ session }: { session: Session }) {
               variant="ghost"
               className="w-full justify-start"
               onClick={async () => {
+                await clearOffline();
                 const { error } = await supabase.auth.signOut();
                 if (error) toast.error("Impossibile uscire.");
               }}
@@ -584,7 +597,16 @@ export function BrainApp({ session }: { session: Session }) {
       )}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-5">
         <div className="pointer-events-auto mx-auto max-w-2xl">
-          {statusText && (
+          {offline && (
+            <div
+              className="mx-auto mb-2 flex w-fit max-w-full items-center gap-2 rounded-full border border-border bg-panel px-3 py-1.5 text-xs text-muted-foreground panel-shadow"
+              role="status"
+            >
+              <WifiOff className="size-3.5 shrink-0" />
+              Sei offline: vedi l’ultima copia salvata, le modifiche tornano quando sei connesso.
+            </div>
+          )}
+          {statusText && !offline && (
             <div
               className="mx-auto mb-2 flex w-fit max-w-full items-center gap-2 rounded-full border border-border bg-panel px-3 py-1.5 text-xs panel-shadow"
               role="status"
