@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { toast } from 'sonner';
-import { LogOut, Sparkles, Plus, Search, ArrowUp, X, Network, List, CalendarDays, Move, Rotate3D, Focus, ZoomIn, ZoomOut, Download, Upload, MoreHorizontal, LockKeyhole, Pin, Orbit, LoaderCircle, RefreshCw, KeyRound } from 'lucide-react';
+import { LogOut, Sparkles, Plus, Search, ArrowUp, X, Network, List, CalendarDays, Move, Rotate3D, Focus, ZoomIn, ZoomOut, Download, Upload, MoreHorizontal, LockKeyhole, Pin, Orbit, LoaderCircle, RefreshCw, KeyRound, Inbox } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { loadGraph } from '@/graph/data';
@@ -16,6 +16,8 @@ import { searchIdeas } from '@/notes/search.functions';
 import { exportArchive, readZip, restoreArchive, type Archive } from '@/notes/archive';
 import { usePipeline, describeStatus } from '@/ai/usePipeline';
 import { embed } from '@/ai/embed';
+import { ImportDialog } from './ImportDialog';
+import { syncCalendars } from '@/import/run';
 const GraphScene = lazy(() => import('@/graph/GraphScene'));
 export function BrainApp({ session }: { session: Session }) {
   const qc = useQueryClient();
@@ -27,13 +29,15 @@ export function BrainApp({ session }: { session: Session }) {
   const [busy, setBusy] = useState(false), [menu, setMenu] = useState(false), [reduced, setReduced] = useState(false);
   const [query, setQuery] = useState(''), [searchMode, setSearchMode] = useState<'keyword'|'ai'>('keyword'), [searching, setSearching] = useState(false);
   const [result, setResult] = useState<Awaited<ReturnType<typeof searchIdeas>> | null>(null);
-  const [cluster, setCluster] = useState<number | null>(null), [legend, setLegend] = useState(true), [passwordOpen, setPasswordOpen] = useState(false);
+  const [cluster, setCluster] = useState<number | null>(null), [legend, setLegend] = useState(true), [passwordOpen, setPasswordOpen] = useState(false), [importOpen, setImportOpen] = useState(false);
   const [filter, setFilter] = useState('all'), [privateOnly, setPrivateOnly] = useState(false), [imported, setImported] = useState<Archive | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const search = useServerFn(searchIdeas);
   useEffect(() => { const mq = window.matchMedia('(prefers-reduced-motion: reduce)'); const update = () => setReduced(mq.matches); update(); mq.addEventListener('change', update); return () => mq.removeEventListener('change', update); }, []);
   const refresh = async () => { await Promise.all([qc.invalidateQueries({ queryKey: ['graph'] }), qc.invalidateQueries({ queryKey: ['notes'] }), qc.invalidateQueries({ queryKey: ['note'] })]); };
   const pipeline = usePipeline(refresh);
+  // Linked calendars refresh themselves when the app opens (at most every few hours).
+  useEffect(() => { syncCalendars(session.user.id, () => {}).then(n => { if (n) void refresh().then(() => pipeline.run()); }).catch(() => {}); }, [session.user.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const statusText = describeStatus(pipeline.status, pipeline.model);
   const reorganize = async () => { setMenu(false); setCluster(null); const groups = await pipeline.run({ reorganize: true }); if (!groups) toast.message('Servono almeno 6 note collegate per formare le costellazioni.'); };
   const highlighted = useMemo(() => result ? result.results.map(r => r.id) : cluster != null && graph.data ? graph.data.nodes.filter(n => n.cluster === cluster).map(n => n.id) : null, [result, cluster, graph.data]);
@@ -45,7 +49,7 @@ export function BrainApp({ session }: { session: Session }) {
     <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 border-b border-border/40 bg-background/70 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl sm:gap-3 sm:px-5 sm:py-4">
       <div className="pointer-events-auto"><h1 className="text-lg font-light tracking-wide">Sinapsi</h1><p className="mt-1 font-mono text-[10px] text-muted-foreground">{graph.data ? `${graph.data.nodes.length} note · ${graph.data.edges.length} connessioni` : 'Caricamento…'}</p></div>
       <div className="pointer-events-auto flex shrink-0 items-center gap-1 sm:gap-2"><nav className="flex border-r border-border pr-1 sm:pr-2" aria-label="Vista">{([{ value: 'graph', icon: Network, label: 'Grafo' }, { value: 'list', icon: List, label: 'Elenco' }, { value: 'timeline', icon: CalendarDays, label: 'Timeline' }] as const).map(v => <Button key={v.value} size="icon" variant={view === v.value ? 'secondary' : 'ghost'} title={v.label} aria-label={v.label} aria-pressed={view === v.value} onClick={() => setView(v.value)}><v.icon /></Button>)}</nav><Button onClick={() => setEditor('new')} size="sm"><Plus /><span className="hidden sm:inline">Nuova nota</span></Button><Button variant="ghost" size="icon" aria-label="Altre azioni" title="Altre azioni" onClick={() => setMenu(!menu)}><MoreHorizontal /></Button></div>
-      {menu && <div className="panel-shadow pointer-events-auto absolute right-4 top-full mt-2 w-60 rounded-lg border border-border bg-popover p-1"><Button variant="ghost" className="w-full justify-start" disabled={busy} onClick={toggleDemo}><Sparkles />{graph.data?.demoCount ? 'Rimuovi demo' : 'Carica demo'}</Button><Button variant="ghost" className="w-full justify-start" disabled={pipeline.status.kind === 'busy'} onClick={() => void reorganize()}><Orbit />Riorganizza costellazioni</Button><Button variant="ghost" className="w-full justify-start" disabled={busy} onClick={async () => { setBusy(true); try { const count = await exportArchive(); toast.success(`Esportate ${count} note`); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); setMenu(false); } }}><Download />Esporta tutto</Button><Button variant="ghost" className="w-full justify-start" onClick={() => input.current?.click()}><Upload />Importa archivio</Button><Button variant="ghost" className="w-full justify-start" onClick={() => { setMenu(false); setPasswordOpen(true); }}><KeyRound />Imposta password</Button><Button variant="ghost" className="w-full justify-start" onClick={async () => { const { error } = await supabase.auth.signOut(); if (error) toast.error('Impossibile uscire.'); }}><LogOut />Esci</Button></div>}
+      {menu && <div className="panel-shadow pointer-events-auto absolute right-4 top-full mt-2 w-60 rounded-lg border border-border bg-popover p-1"><Button variant="ghost" className="w-full justify-start" disabled={busy} onClick={toggleDemo}><Sparkles />{graph.data?.demoCount ? 'Rimuovi demo' : 'Carica demo'}</Button><Button variant="ghost" className="w-full justify-start" onClick={() => { setMenu(false); setImportOpen(true); }}><Inbox />Importa chat, contatti, calendario</Button><Button variant="ghost" className="w-full justify-start" disabled={pipeline.status.kind === 'busy'} onClick={() => void reorganize()}><Orbit />Riorganizza costellazioni</Button><Button variant="ghost" className="w-full justify-start" disabled={busy} onClick={async () => { setBusy(true); try { const count = await exportArchive(); toast.success(`Esportate ${count} note`); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); setMenu(false); } }}><Download />Esporta tutto</Button><Button variant="ghost" className="w-full justify-start" onClick={() => input.current?.click()}><Upload />Ripristina archivio ZIP</Button><Button variant="ghost" className="w-full justify-start" onClick={() => { setMenu(false); setPasswordOpen(true); }}><KeyRound />Imposta password</Button><Button variant="ghost" className="w-full justify-start" onClick={async () => { const { error } = await supabase.auth.signOut(); if (error) toast.error('Impossibile uscire.'); }}><LogOut />Esci</Button></div>}
     </header>
     <input ref={input} type="file" accept=".zip" className="hidden" aria-label="Importa archivio ZIP" onChange={async e => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; try { setImported(readZip(new Uint8Array(await file.arrayBuffer()))); setMenu(false); } catch (err) { toast.error((err as Error).message); } }} />
     {graph.isLoading && <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Caricamento delle note…</div>}
@@ -64,6 +68,7 @@ export function BrainApp({ session }: { session: Session }) {
     {editor && <NoteEditor {...(editor === 'new' ? {} : { note: editor })} onClose={() => setEditor(null)} onSaved={id => { setEditor(null); setSelected(id); setResult(null); void refresh().then(() => pipeline.run()); }} />}
     {imported && <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Conferma importazione"><div className="panel-shadow w-full max-w-md space-y-5 rounded-lg border border-border bg-card p-6"><h2 className="text-xl font-light">Importa archivio</h2><p className="text-sm text-muted-foreground">{imported.tables.notes.length} note e {imported.tables.edges.length} connessioni verificate. Le note già presenti nello stesso archivio saranno ripristinate, senza duplicati.</p><div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setImported(null)}>Annulla</Button><Button disabled={busy} onClick={async () => { setBusy(true); try { const count = await restoreArchive(imported); setImported(null); setSelected(null); setResult(null); await refresh(); void pipeline.run(); toast.success(`Ripristinate ${count} note`); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } }}>{busy ? 'Importazione…' : 'Importa'}</Button></div></div></div>}
     {passwordOpen && <PasswordDialog onClose={() => setPasswordOpen(false)} />}
+    {importOpen && <ImportDialog userId={session.user.id} onClose={() => setImportOpen(false)} onImported={() => { void refresh().then(() => pipeline.run()); }} />}
   </main>;
 }
 

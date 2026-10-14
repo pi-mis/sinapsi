@@ -67,18 +67,24 @@ function meta(html: string, name: string) {
   return tag ? decode(tag.match(/content=["']([^"']*)["']/i)?.[1] ?? "").trim() : "";
 }
 
-/** Fetches a public web page and returns its title, description and readable text. */
-export async function readLink(
-  raw: string,
-): Promise<{ url: string; title: string; description: string; text: string }> {
+/** Parses and validates a public http(s) URL (webcal:// is accepted for calendars). */
+export function publicUrl(raw: string): URL {
   let url: URL;
   try {
-    url = new URL(raw);
+    url = new URL(raw.trim().replace(/^webcals?:\/\//i, "https://"));
   } catch {
     throw new Error("Il link non è valido.");
   }
   if (!/^https?:$/.test(url.protocol) || BLOCKED_HOST.test(url.hostname))
     throw new Error("Questo link non si può aprire.");
+  return url;
+}
+
+/** Fetches a public web page and returns its title, description and readable text. */
+export async function readLink(
+  raw: string,
+): Promise<{ url: string; title: string; description: string; text: string }> {
+  const url = publicUrl(raw);
   let html = "";
   try {
     const response = await fetch(url, {

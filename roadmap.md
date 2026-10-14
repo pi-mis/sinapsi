@@ -20,6 +20,13 @@
 - [x] Il testo degli allegati entra in ricerca, embeddings, sinapsi e chat
 - [ ] Gli allegati nell'esportazione ZIP (oggi esporta solo i metadati e il testo estratto)
 
+# Fase 6 — Il cervello si riempie da solo
+- [x] Import chat WhatsApp (.txt/.zip): una nota per conversazione, trascrizione, riassunto AI opzionale
+- [x] Rubrica (vCard) e LinkedIn (Connections.csv): le persone citate nelle note diventano neuroni
+- [x] Calendario: file .ics o link iCal segreto che si aggiorna da solo
+- [ ] Email (inoltro a un indirizzo dedicato; Gmail richiede la verifica di Google)
+- [ ] Foto e media dentro gli export di WhatsApp
+
 # Fase 4 — Grafica
 - [x] Shader dei neuroni (bordo luminoso, nucleo, respiro) con alone e bloom
 - [x] Sinapsi curve con impulsi luminosi che viaggiano
