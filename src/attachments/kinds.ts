@@ -39,6 +39,7 @@ export function safeName(name: string): string {
 /** The display name stored in the path after the uuid prefix. */
 export function displayName(uri: string): string {
   if (uri.startsWith("whatsapp://")) return "Trascrizione WhatsApp";
+  if (uri.startsWith("github://")) return "README";
   const last = uri.split("/").pop() ?? uri;
   return last.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "");
 }

@@ -64,7 +64,9 @@ export async function exportArchive() {
       if (error) throw new Error('Impossibile esportare tutte le note.');
       rows.push(...data as unknown as Row[]); if (data.length < 1000) break;
     }
-    tables[table] = rows.map(({ user_id: _user, fts: _fts, ...row }) => row);
+    // Secrets never leave in an export: connector tokens, calendar links and the reminders feed link.
+    const safe = table === 'sources' ? rows.filter(r => !['github', 'calendar', 'reminder_feed'].includes(String(r['kind']))) : rows;
+    tables[table] = safe.map(({ user_id: _user, fts: _fts, ...row }) => row);
   }));
   const archive: Archive = { version: 1, exported_at: new Date().toISOString(), tables };
   const bytes = createZip(archive);

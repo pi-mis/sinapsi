@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { summarizeForNote } from "@/attachments/kinds";
+import type { Json } from "@/integrations/supabase/types";
+import { localToday, runAfter } from "@/brain/reminders";
 import { canonicalPair } from "@/ai/vector";
 import { stableId } from "./ids";
 import { isoDay, toSessions, transcript, type ChatMessage } from "./whatsapp";
@@ -74,16 +76,14 @@ async function ensurePerson(
   const id = await stableId(userId, `person:${normalizeName(name)}`);
   const { data } = await supabase.from("notes").select("id").eq("id", id).maybeSingle();
   if (!data) {
-    const { error } = await supabase
-      .from("notes")
-      .insert({
-        id,
-        title: name,
-        content: details || name,
-        type,
-        is_private: true,
-        ai_status: "pending",
-      });
+    const { error } = await supabase.from("notes").insert({
+      id,
+      title: name,
+      content: details || name,
+      type,
+      is_private: true,
+      ai_status: "pending",
+    });
     if (error) throw new Error("Impossibile creare la persona.");
   }
   return id;
@@ -122,6 +122,7 @@ export async function importWhatsApp(options: {
 
   let created = 0;
   let aiFailures = 0;
+  const today = localToday();
   const edges: Edge[] = [];
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i]!;
@@ -134,6 +135,7 @@ export async function importWhatsApp(options: {
     const header = `Chat WhatsApp con ${chatName} · ${humanDay(session.start)}`;
     let title = `${chatName} · ${humanDay(session.start)}`;
     let content = `${header}\n\n${text.slice(0, 800)}${text.length > 800 ? "…" : ""}`;
+    let commitments: { text: string; due: string | null }[] = [];
     if (useAI) {
       const result = await summarizeConversation({
         data: { chat: chatName, me, day: isoDay(session.start), transcript: text },
@@ -144,12 +146,17 @@ export async function importWhatsApp(options: {
         if (/limite/i.test(result.error)) useAI = false;
       } else {
         title = result.title || title;
+        commitments = result.commitments;
         content = [
           header,
           "",
           result.summary,
           ...(result.commitments.length
-            ? ["", "Impegni:", ...result.commitments.map((c) => `- ${c}`)]
+            ? [
+                "",
+                "Impegni:",
+                ...result.commitments.map((c) => `- ${c.text}${c.due ? ` (${c.due})` : ""}`),
+              ]
             : []),
         ].join("\n");
       }
@@ -167,6 +174,18 @@ export async function importWhatsApp(options: {
     });
     if (error) throw new Error("Impossibile salvare una conversazione.");
     await supabase.from("sources").insert({ kind: "text", uri, folder: id, extracted_text: text });
+    // Commitments that are still ahead become reminders linked to the conversation.
+    const upcoming = commitments.filter((c) => !c.due || c.due >= today);
+    if (upcoming.length)
+      await supabase.from("jobs").insert(
+        upcoming.map((c) => ({
+          kind: "reminder",
+          status: "open",
+          note_id: id,
+          run_after: runAfter(c.due),
+          payload: { text: c.text, due: c.due, source: "whatsapp" } as unknown as Json,
+        })),
+      );
     created++;
   }
   report("Collego le conversazioni…");

@@ -27,6 +27,18 @@
 - [ ] Email (inoltro a un indirizzo dedicato; Gmail richiede la verifica di Google)
 - [ ] Foto e media dentro gli export di WhatsApp
 
+# Fase 7 — Il cervello che lavora in parallelo
+- [x] Le note vengono lette per intenzioni e scadenze → promemoria
+- [x] Se la scadenza manca, l'AI la cerca sul web e salva la fonte
+- [x] Impegni delle chat WhatsApp → promemoria
+- [x] Pannello promemoria, campanella con badge, notifica nel browser
+- [x] Calendario privato dei promemoria da aggiungere al telefono (notifiche native)
+- [x] Riepilogo settimanale "La tua settimana"
+- [x] Chat AI a più turni per il brainstorming
+- [x] Connettore GitHub: i repository diventano progetti e si aggiornano da soli
+- [ ] Notifiche push e Telegram anche ad app chiusa (serve un job programmato)
+- [ ] Altri connettori: Notion, Google Drive, email
+
 # Fase 4 — Grafica
 - [x] Shader dei neuroni (bordo luminoso, nucleo, respiro) con alone e bloom
 - [x] Sinapsi curve con impulsi luminosi che viaggiano

@@ -88,10 +88,11 @@ async function linkNote(id: string, vector: string): Promise<number | null> {
   return data?.cluster_id ?? null;
 }
 
-/** Embeds and links every pending note. Returns how many were processed. */
-export async function processPending(report: (step: PipelineStep) => void): Promise<number> {
+/** Embeds and links every pending note. Returns the ids processed successfully. */
+export async function processPending(report: (step: PipelineStep) => void): Promise<string[]> {
   const total = await countPending();
-  if (!total) return 0;
+  if (!total) return [];
+  const ok: string[] = [];
   const seen = new Set<string>();
   let done = 0;
   report({ phase: "linking", done, total });
@@ -125,13 +126,14 @@ export async function processPending(report: (step: PipelineStep) => void): Prom
         const cluster = await linkNote(note.id, vector);
         if (cluster != null)
           await supabase.from("notes").update({ cluster_id: cluster }).eq("id", note.id);
+        ok.push(note.id);
       } catch {
         await supabase.from("notes").update({ ai_status: "error" }).eq("id", note.id);
       }
       report({ phase: "linking", done: ++done, total: Math.max(total, done) });
     }
   }
-  return done;
+  return ok;
 }
 
 type EmbeddedRow = { id: string; title: string; is_private: boolean; embedding: string | null };

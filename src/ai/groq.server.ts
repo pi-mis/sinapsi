@@ -149,6 +149,54 @@ export async function transcribeAudio(
   return (body.text ?? "").trim();
 }
 
+/**
+ * Asks a GPT-OSS model on Groq to search the web (built-in browser_search tool).
+ * Returns the final text, which ends with the JSON line requested in the prompt.
+ */
+export async function searchWeb(client: SupabaseClient<Database>, prompt: string): Promise<string> {
+  const apiKey = groqKey();
+  await consumeQuota(client);
+  let response: Response;
+  try {
+    response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(45000),
+      body: JSON.stringify({
+        model: GROQ_MODELS.fast,
+        messages: [{ role: "user", content: prompt }],
+        tools: [{ type: "browser_search" }],
+        tool_choice: "required",
+        reasoning_effort: "low",
+        max_completion_tokens: 1500,
+      }),
+    });
+  } catch {
+    throw new AiUnavailableError("La ricerca sul web non ha risposto in tempo.");
+  }
+  if (response.status === 429)
+    throw new AiUnavailableError(
+      "Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto.",
+    );
+  if (!response.ok)
+    throw new AiUnavailableError("Ricerca sul web non disponibile con questa chiave Groq.");
+  const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+  return (body.choices?.[0]?.message?.content ?? "").trim();
+}
+
+/** Extracts the last JSON object on its own in a text (search answers put it at the end). */
+export function extractLastJson<T>(text: string): T | null {
+  const matches = text.match(/\{[^{}]*\}/g);
+  for (const candidate of (matches ?? []).reverse()) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 /** Extracts the first JSON object from a model answer (models sometimes wrap it in prose). */
 export function extractJson<T>(text: string): T | null {
   const start = text.indexOf("{");

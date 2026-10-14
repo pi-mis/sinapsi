@@ -11,7 +11,16 @@ import {
   RefreshCw,
   Trash2,
   Link2,
+  Github,
+  KeyRound,
 } from "lucide-react";
+import {
+  addGitHub,
+  listGitHub,
+  removeGitHub,
+  syncGitHub,
+  type GitHubAccount,
+} from "@/connectors/run";
 import { Button } from "./ui/button";
 import { parseWhatsApp, toSessions, chatNameFromFile, type ChatMessage } from "@/import/whatsapp";
 import { parseLinkedInCsv, parseVCards, type ContactInput } from "@/import/contacts";
@@ -29,7 +38,7 @@ import {
   type Progress,
 } from "@/import/run";
 
-type Tab = "whatsapp" | "contacts" | "calendar";
+type Tab = "whatsapp" | "contacts" | "calendar" | "github";
 type Status = { message: string; done?: number; total?: number } | null;
 
 const field =
@@ -67,6 +76,7 @@ export function ImportDialog({
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
     { id: "contacts", label: "Contatti", icon: Users },
     { id: "calendar", label: "Calendario", icon: CalendarDays },
+    { id: "github", label: "GitHub", icon: Github },
   ] as const;
 
   return (
@@ -85,7 +95,10 @@ export function ImportDialog({
             <X />
           </Button>
         </header>
-        <nav className="flex gap-1 border-b border-border p-2" aria-label="Fonte">
+        <nav
+          className="flex gap-1 overflow-x-auto border-b border-border p-2 [scrollbar-width:none]"
+          aria-label="Fonte"
+        >
           {tabs.map((t) => (
             <Button
               key={t.id}
@@ -110,6 +123,7 @@ export function ImportDialog({
           {tab === "calendar" && (
             <CalendarTab userId={userId} busy={busy} run={run} report={report} />
           )}
+          {tab === "github" && <GitHubTab userId={userId} busy={busy} run={run} report={report} />}
         </div>
         {status && (
           <footer className="border-t border-border p-4" role="status">
@@ -511,6 +525,146 @@ function CalendarTab({ userId, busy, run, report }: TabProps) {
         )}
         <p className={hint}>Gli eventi ricorrenti compaiono una sola volta, alla prima data.</p>
       </section>
+    </>
+  );
+}
+
+function GitHubTab({ userId, busy, run, report }: TabProps) {
+  const [accounts, setAccounts] = useState<GitHubAccount[]>([]);
+  const [username, setUsername] = useState("");
+  const [token, setToken] = useState("");
+  const [withToken, setWithToken] = useState(false);
+  const refresh = () =>
+    listGitHub()
+      .then(setAccounts)
+      .catch(() => setAccounts([]));
+  useEffect(() => {
+    void refresh();
+  }, []);
+  const summary = (r: { updated: number; total: number; limited: boolean }) =>
+    `${r.updated} progetti aggiornati su ${r.total}${r.limited ? " (limite di GitHub raggiunto: il resto al prossimo aggiornamento)" : ""}.`;
+  return (
+    <>
+      <p className={hint}>
+        Ogni repository diventa un neurone <b>progetto</b> con descrizione, README e ultimi commit,
+        collegato alle note che lo citano per nome. Si aggiorna da solo ogni 6 ore quando apri
+        Sinapsi: vengono riletti solo i repository modificati.
+      </p>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!username.trim() && !token.trim()) return;
+          void run(async () => {
+            const r = await addGitHub(userId, username, withToken ? token : null, report);
+            setUsername("");
+            setToken("");
+            await refresh();
+            return `GitHub collegato: ${summary(r)}`;
+          });
+        }}
+      >
+        <input
+          aria-label="Utente GitHub"
+          placeholder="Il tuo utente GitHub (es. pi-mis)"
+          autoCapitalize="none"
+          autoCorrect="off"
+          className={field}
+          value={username}
+          disabled={withToken}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={withToken}
+            onChange={(e) => setWithToken(e.target.checked)}
+          />
+          <span>
+            Includi i repository privati
+            <span className={`block ${hint}`}>
+              Serve un token in sola lettura: GitHub → Settings → Developer settings → Fine-grained
+              tokens, accesso ai tuoi repository con permessi <b>Contents: read</b> e{" "}
+              <b>Metadata: read</b>. I repository privati diventano note private, mai inviate
+              all’AI. Il token resta salvato nel tuo account e non finisce nelle esportazioni.
+            </span>
+          </span>
+        </label>
+        {withToken && (
+          <input
+            type="password"
+            aria-label="Token GitHub"
+            placeholder="github_pat_…"
+            autoComplete="off"
+            className={field}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+        )}
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={busy || (withToken ? !token.trim() : !username.trim())}
+        >
+          {withToken ? <KeyRound /> : <Github />}
+          Collega GitHub
+        </Button>
+      </form>
+      {accounts.length > 0 && (
+        <ul className="space-y-2">
+          {accounts.map((a) => (
+            <li
+              key={a.id}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+            >
+              <Github className="size-4 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">
+                  {a.login}
+                  {a.hasToken ? " · anche privati" : ""}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {a.repos} progetti ·{" "}
+                  {a.lastSync
+                    ? `aggiornato ${new Date(a.lastSync).toLocaleString("it-IT")}`
+                    : "mai aggiornato"}
+                </span>
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Aggiorna ora"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    const r = await syncGitHub(userId, a.id, report, true);
+                    await refresh();
+                    return summary(r);
+                  })
+                }
+              >
+                <RefreshCw />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Scollega GitHub"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    await removeGitHub(a.id);
+                    await refresh();
+                    return "GitHub scollegato (i progetti già importati restano).";
+                  })
+                }
+              >
+                <Trash2 />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }

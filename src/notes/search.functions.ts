@@ -14,6 +14,11 @@ export const searchIdeas = createServerFn({ method: "POST" })
       mode: z.enum(["keyword", "ai"]),
       // Query vector computed on-device; absent if the local model is unavailable.
       embedding: z.array(z.number().finite()).length(MODEL_DIM).optional(),
+      // Previous turns of the same conversation, oldest first.
+      history: z
+        .array(z.object({ q: z.string().max(500), a: z.string().max(4000) }))
+        .max(4)
+        .optional(),
     }),
   )
   .handler(async ({ data, context }): Promise<SearchResponse> => {
@@ -26,7 +31,13 @@ export const searchIdeas = createServerFn({ method: "POST" })
       if (error) throw new Error("Ricerca non disponibile. Riprova.");
       if (data.mode === "keyword") return { results: matches ?? [], answer: "", error: "" };
       const { askMemory } = await import("./server/search.server");
-      return await askMemory(context.supabase, data.query, data.embedding, matches ?? []);
+      return await askMemory(
+        context.supabase,
+        data.query,
+        data.embedding,
+        matches ?? [],
+        data.history ?? [],
+      );
     } catch (error) {
       return {
         results: [],

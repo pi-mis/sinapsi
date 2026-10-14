@@ -6,13 +6,18 @@ export type PipelineStatus =
   { kind: "idle" } | { kind: "error"; message: string } | ({ kind: "busy" } & PipelineStep);
 
 /** Drives the semantic pipeline from the UI: one run at a time, re-run if asked while busy. */
-export function usePipeline(onChanged: () => Promise<void> | void) {
+export function usePipeline(
+  onChanged: () => Promise<void> | void,
+  onProcessed?: (ids: string[]) => void,
+) {
   const [status, setStatus] = useState<PipelineStatus>({ kind: "idle" });
   const [model, setModel] = useState<ModelProgress>({ loaded: 0, total: 0, ready: false });
   const running = useRef(false);
   const again = useRef(false);
   const changedRef = useRef(onChanged);
   changedRef.current = onChanged;
+  const processedRef = useRef(onProcessed);
+  processedRef.current = onProcessed;
 
   useEffect(() => onModelProgress(setModel), []);
 
@@ -32,7 +37,8 @@ export function usePipeline(onChanged: () => Promise<void> | void) {
         const need = reorganize ? { needed: true, first: true } : await needsReclustering();
         if (need.needed) groups = await recluster(report, { relayout: need.first });
         reorganize = false;
-        if (processed || groups) await changedRef.current();
+        if (processed.length) processedRef.current?.(processed);
+        if (processed.length || groups) await changedRef.current();
       } while (again.current);
       setStatus({ kind: "idle" });
     } catch (error) {
