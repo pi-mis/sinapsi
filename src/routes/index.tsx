@@ -6,9 +6,9 @@ import { BrainApp } from "@/components/BrainApp";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Cervello digitale — le tue idee in costellazioni" },
+      { title: "Sinapsi — le tue idee in costellazioni" },
       { name: "description", content: "Note, ricordi e idee che si collegano per significato in un grafo 3D luminoso." },
-      { property: "og:title", content: "Cervello digitale" },
+      { property: "og:title", content: "Sinapsi" },
       { property: "og:description", content: "Note, ricordi e idee che si collegano per significato in un grafo 3D luminoso." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

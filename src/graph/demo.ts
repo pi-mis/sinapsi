@@ -1,12 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
 import { runLayout } from "./layout";
+import type { GNode, GraphData } from "./data";
 
 const CLUSTERS: { type: string; items: [string, string][] }[] = [
   {
     type: "libro",
     items: [
       ["Il nome della rosa", "Eco usa il giallo per parlare di conoscenza proibita e biblioteche."],
-      ["Le città invisibili", "Calvino: ogni città è un modo di guardare il desiderio e la memoria."],
+      [
+        "Le città invisibili",
+        "Calvino: ogni città è un modo di guardare il desiderio e la memoria.",
+      ],
       ["Se una notte d'inverno", "Il lettore come protagonista, romanzo fatto di inizi."],
       ["Lezioni americane", "Leggerezza, rapidità, esattezza, visibilità, molteplicità."],
       ["Il barone rampante", "Vivere sugli alberi come forma di libertà ostinata."],
@@ -14,7 +18,10 @@ const CLUSTERS: { type: string; items: [string, string][] }[] = [
       ["Pensieri lenti e veloci", "Sistema 1 e sistema 2: intuizione contro ragionamento."],
       ["Sapiens", "Le finzioni condivise rendono possibile la cooperazione su larga scala."],
       ["Il piccolo principe", "L'essenziale è invisibile agli occhi."],
-      ["Citazione di Calvino", "La leggerezza non è superficialità ma planare sulle cose dall'alto."],
+      [
+        "Citazione di Calvino",
+        "La leggerezza non è superficialità ma planare sulle cose dall'alto.",
+      ],
     ],
   },
   {
@@ -133,10 +140,12 @@ export async function seedDemo(userId: string) {
     for (let k = 0; k < 10; k++) {
       const i = c * 10 + k;
       const n = 2 + Math.floor(r() * 3);
-      for (let m = 0; m < n; m++) add(i, c * 10 + Math.floor(r() * 10), 0.45 + r() * 0.5, kinds[Math.floor(r() * 4)]!);
+      for (let m = 0; m < n; m++)
+        add(i, c * 10 + Math.floor(r() * 10), 0.45 + r() * 0.5, kinds[Math.floor(r() * 4)]!);
     }
   }
-  for (let m = 0; m < 14; m++) add(Math.floor(r() * 60), Math.floor(r() * 60), 0.35 + r() * 0.15, "semantic");
+  for (let m = 0; m < 14; m++)
+    add(Math.floor(r() * 60), Math.floor(r() * 60), 0.35 + r() * 0.15, "semantic");
 
   const positions = await runLayout({
     nodes: notes.map((n) => ({ id: n.id })),
@@ -155,4 +164,57 @@ export async function seedDemo(userId: string) {
 export async function clearDemo() {
   const { error } = await supabase.from("notes").delete().eq("is_demo", true);
   if (error) throw new Error("Impossibile cancellare le note demo");
+}
+
+/**
+ * A purely local demo graph (no database): the demo notes arranged in six
+ * constellations. Used as the living background of the login screen.
+ */
+export function buildDemoGraph(): GraphData {
+  const r = rand(7);
+  const gauss = () => Math.sqrt(-2 * Math.log(r() + 1e-9)) * Math.cos(2 * Math.PI * r());
+  const hues = [0.48, 0.1, 0.72, 0.33, 0.93, 0.58];
+  const nodes: GNode[] = CLUSTERS.flatMap((c, ci) => {
+    const y = 1 - (2 * (ci + 0.5)) / CLUSTERS.length;
+    const ring = Math.sqrt(1 - y * y);
+    const t = ci * Math.PI * (3 - Math.sqrt(5));
+    const center = [Math.cos(t) * ring * 3.2, y * 2.6, Math.sin(t) * ring * 3.2] as const;
+    return c.items.map(([title], k) => ({
+      id: `demo-${ci}-${k}`,
+      title,
+      type: c.type,
+      weight: 0.15 + r() * 0.85,
+      cluster: 100 + ci,
+      hue: hues[ci]!,
+      x: center[0] + gauss() * 0.75,
+      y: center[1] + gauss() * 0.75,
+      z: center[2] + gauss() * 0.75,
+    }));
+  });
+  const edges: GraphData["edges"] = [];
+  const seen = new Set<string>();
+  const add = (a: number, b: number, score: number) => {
+    if (a === b) return;
+    const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    edges.push({ a, b, score, kind: "semantic" });
+  };
+  for (let c = 0; c < CLUSTERS.length; c++)
+    for (let k = 0; k < 10; k++)
+      for (let m = 0; m < 2 + Math.floor(r() * 2); m++)
+        add(c * 10 + k, c * 10 + Math.floor(r() * 10), 0.4 + r() * 0.6);
+  for (let m = 0; m < 12; m++) add(Math.floor(r() * 60), Math.floor(r() * 60), 0.2 + r() * 0.2);
+  return {
+    nodes,
+    edges,
+    demoCount: nodes.length,
+    constellations: CLUSTERS.map((c, ci) => ({
+      id: 100 + ci,
+      label: c.type,
+      summary: null,
+      hue: hues[ci]!,
+      count: c.items.length,
+    })),
+  };
 }

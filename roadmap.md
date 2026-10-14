@@ -15,6 +15,9 @@
 - [ ] Verifica con note reali e taratura delle soglie in `src/ai/config.ts`
 
 # Fase 4 — Grafica
-- [ ] Shader dei neuroni (fresnel, membrana, nucleo luminoso) e bloom selettivo
-- [ ] Sinapsi curve con spessore reale e impulsi luminosi
-- [ ] Fluttuazione via GPU e livelli di dettaglio (nebulose → neuroni → etichette)
+- [x] Shader dei neuroni (bordo luminoso, nucleo, respiro) con alone e bloom
+- [x] Sinapsi curve con impulsi luminosi che viaggiano
+- [ ] Sinapsi con spessore reale (oggi linee da 1px con bagliore)
+- [x] Fluttuazione via GPU, polvere stellare, nomi delle costellazioni nello spazio
+- [ ] Livelli di dettaglio per migliaia di note (nebulose → neuroni → etichette)
+- [x] Versione mobile e accesso con password

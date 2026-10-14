@@ -21,5 +21,9 @@
 - Private notes are embedded and linked locally, but their content is never sent to Groq (chat answers, constellation names and connection explanations all skip them).
 - The AI chat is RAG-only: local query vector + full-text retrieval, then a cited answer; with no relevant notes it says so without calling the model.
 - Note CRUD and text search live in `src/notes/`; archive operations validate a versioned portable ZIP before a transactional restore to preserve graph relationships.
-- The graph uses on-demand rendering with user-driven camera motion and instanced nodes to keep navigation stable and edges sharp. The force layout pulls each constellation towards its own anchor.
+- The graph renders continuously so neurons can float, breathe and send pulses along synapses (falls back to on-demand rendering with no motion when the user prefers reduced motion). Camera motion stays user-driven, except the login background which rotates slowly. The force layout pulls each constellation towards its own anchor.
+- Neurons, halos, synapses and background dust are custom shaders in `src/graph/shaders.ts`; all share the same `drift()` so synapses stay attached to floating neurons. Picking uses the static instance positions. Bloom and vignette come from `@react-three/postprocessing`.
+- 3D labels are plain DOM nodes positioned by `LabelProjector` each frame (no drei `Html`, which mounts extra React roots and crashed on unmount).
+- Mobile: safe-area insets, 16px inputs (no iOS zoom), one-finger rotate on touch, constellation chips under the header.
+- Auth: email + password by default (sessions persist in localStorage), magic link and Google as alternatives; accounts created via link can add a password from the ⋯ menu.
 - Phase 2's "latest 100 notes" AI search has been replaced by the Phase 3 RAG search above.
