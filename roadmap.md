@@ -48,3 +48,9 @@
 - [x] Luce adattiva alla densità: leggibile anche con 2000+ neuroni
 - [x] App installabile e consultabile offline (ultima copia salvata)
 - [x] Versione mobile e accesso con password
+
+# Accoglienza e amministrazione
+- [x] Verifica dell'email al primo accesso (solo indirizzi reali)
+- [x] Animazione di benvenuto: cosa ci metti dentro, a cosa serve, connettori e GitHub; alla fine si esce dalla demo
+- [x] "Rivedi l'introduzione" dal menu ⋯
+- [x] Pagina /admin per gli amministratori: utenti registrati, email verificate, note, collegamenti e uso dell'AI (solo conteggi)

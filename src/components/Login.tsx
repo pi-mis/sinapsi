@@ -49,7 +49,7 @@ export function Login() {
         if (error)
           throw new Error(
             error.message.toLowerCase().includes("confirm")
-              ? "Prima conferma l'indirizzo email con il link che ti ho inviato."
+              ? "Prima conferma l'indirizzo email con il link che ti ho inviato (controlla anche lo spam)."
               : "Email o password non corrette. Se finora entravi con il link, entra con il link e imposta una password dal menu.",
           );
       } else {
@@ -65,7 +65,9 @@ export function Login() {
             "Esiste già un account con questa email: entra con il link, poi imposta una password dal menu ⋯.",
           );
         else if (!data.session)
-          setNotice("Ti ho inviato un'email per confermare l'account: serve solo la prima volta.");
+          setNotice(
+            `Quasi fatto! Ti ho inviato un link a ${email}: aprilo per attivare l'account (controlla anche lo spam), poi entra con email e password. Serve solo la prima volta.`,
+          );
       }
     } catch (err) {
       toast.error((err as Error).message);

@@ -30,6 +30,8 @@ import {
   Bell,
   MessagesSquare,
   WifiOff,
+  PlayCircle,
+  ShieldCheck,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +52,9 @@ import { RemindersPanel, useReminders } from "./RemindersPanel";
 import { scanNotes } from "@/brain/client";
 import { groupOf, localToday, weekKey } from "@/brain/reminders";
 import { clearOffline, onOfflineCopy, withOffline } from "@/lib/offline";
+import { Onboarding } from "./Onboarding";
+import { amIAdmin } from "@/admin/admin.functions";
+import { Link } from "@tanstack/react-router";
 const GraphScene = lazy(() => import("@/graph/GraphScene"));
 export function BrainApp({ session }: { session: Session }) {
   const qc = useQueryClient();
@@ -57,6 +62,46 @@ export function BrainApp({ session }: { session: Session }) {
   const notes = useQuery({ queryKey: ["notes"], queryFn: () => withOffline("notes", listNotes) });
   const [offline, setOffline] = useState(false);
   useEffect(() => onOfflineCopy(setOffline), []);
+  // First access: the animated tour (remembered on the account, so it shows once per person).
+  const [tour, setTour] = useState(() => {
+    if (session.user.user_metadata?.["onboarded_at"]) return false;
+    try {
+      return localStorage.getItem(`sinapsi-onboarded-${session.user.id}`) !== "1";
+    } catch {
+      return true;
+    }
+  });
+  const adminFn = useServerFn(amIAdmin);
+  const admin = useQuery({
+    queryKey: ["am-i-admin"],
+    queryFn: () => adminFn(),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const endTour = async (createNote: boolean) => {
+    setTour(false);
+    if (createNote) setEditor("new");
+    try {
+      localStorage.setItem(`sinapsi-onboarded-${session.user.id}`, "1");
+    } catch {
+      /* ignore */
+    }
+    void supabase.auth.updateUser({ data: { onboarded_at: new Date().toISOString() } });
+    // The tour leaves the demo: demo notes loaded earlier are removed too.
+    if (graph.data?.demoCount) {
+      try {
+        await clearDemo();
+        await refresh();
+      } catch {
+        /* the demo can still be removed from the menu */
+      }
+    }
+    toast.message("Demo chiusa", {
+      description:
+        "La puoi riattivare quando vuoi dal menu ⋯ → Carica demo, o rivedere l’introduzione.",
+      duration: 7000,
+    });
+  };
   // Back online: reload everything and let the brain catch up.
   useEffect(() => {
     const back = () => {
@@ -195,7 +240,8 @@ export function BrainApp({ session }: { session: Session }) {
   const move = (action: ViewCommand["action"]) => setCommand((c) => ({ action, tick: c.tick + 1 }));
   return (
     <main className="fixed inset-0 bg-background text-foreground">
-      {graph.data && graph.data.nodes.length > 0 && view === "graph" && (
+      {tour && <Onboarding onDone={(createNote) => void endTour(createNote)} />}
+      {!tour && graph.data && graph.data.nodes.length > 0 && view === "graph" && (
         <Suspense
           fallback={
             <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
@@ -302,6 +348,25 @@ export function BrainApp({ session }: { session: Session }) {
               <Sparkles />
               {graph.data?.demoCount ? "Rimuovi demo" : "Carica demo"}
             </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => {
+                setMenu(false);
+                setTour(true);
+              }}
+            >
+              <PlayCircle />
+              Rivedi l’introduzione
+            </Button>
+            {admin.data?.admin && (
+              <Button variant="ghost" className="w-full justify-start" asChild>
+                <Link to="/admin">
+                  <ShieldCheck />
+                  Amministrazione
+                </Link>
+              </Button>
+            )}
             <Button
               variant="ghost"
               className="w-full justify-start"
