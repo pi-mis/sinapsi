@@ -1,3 +1,4 @@
+import { t, tr } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { BUCKET, MAX_BYTES, kindOf, summarizeForNote, type AttachmentKind } from "./kinds";
 import { extractPdfText, extractPlainText } from "./extract";
@@ -23,7 +24,7 @@ export async function listAttachments(noteId: string): Promise<Attachment[]> {
     .select("id,kind,uri,extracted_text,created_at")
     .eq("folder", noteId)
     .order("created_at");
-  if (error) throw new Error("Impossibile leggere gli allegati.");
+  if (error) throw new Error(t("Impossibile leggere gli allegati."));
   return (data ?? []).flatMap((r) =>
     r.uri ? [{ ...r, uri: r.uri, kind: r.kind as AttachmentKind }] : [],
   );
@@ -43,7 +44,7 @@ export async function syncNote(noteId: string) {
     .from("notes")
     .update({ enriched: summarizeForNote(data ?? []), ai_status: "pending" })
     .eq("id", noteId);
-  if (error) throw new Error("Impossibile aggiornare la nota.");
+  if (error) throw new Error(t("Impossibile aggiornare la nota."));
 }
 
 export type UploadStep = "reading" | "uploading" | "analyzing";
@@ -54,7 +55,8 @@ export async function uploadFile(
   file: File,
   onStep: (step: UploadStep) => void,
 ): Promise<{ warning: string | null }> {
-  if (file.size > MAX_BYTES) throw new Error(`"${file.name}" supera il limite di 25 MB.`);
+  if (file.size > MAX_BYTES)
+    throw new Error(t("“{name}” supera il limite di 25 MB.", { name: file.name }));
   const kind = kindOf(file.type, file.name);
   let extracted: string | undefined;
   let warning: string | null = null;
@@ -63,9 +65,9 @@ export async function uploadFile(
     try {
       extracted = kind === "pdf" ? await extractPdfText(file) : await extractPlainText(file);
       if (kind === "pdf" && !extracted)
-        warning = "Il PDF non contiene testo selezionabile (forse è una scansione).";
+        warning = t("Il PDF non contiene testo selezionabile (forse è una scansione).");
     } catch {
-      warning = "Non sono riuscito a leggere il testo del documento: l'ho salvato comunque.";
+      warning = t("Non sono riuscito a leggere il testo del documento: l'ho salvato comunque.");
     }
   }
   onStep("uploading");
@@ -75,7 +77,7 @@ export async function uploadFile(
     .uploadToSignedUrl(target.path, target.token, file, {
       contentType: file.type || "application/octet-stream",
     });
-  if (error) throw new Error(`Caricamento di "${file.name}" non riuscito.`);
+  if (error) throw new Error(t("Caricamento di “{name}” non riuscito.", { name: file.name }));
   const { id } = await registerAttachment({
     data: {
       noteId,
@@ -88,7 +90,12 @@ export async function uploadFile(
     onStep("analyzing");
     const result = await analyzeAttachment({ data: { id } });
     if (result.error)
-      warning = `${kind === "image" ? "Immagine" : "Audio"} salvato, ma l'AI non l'ha letto: ${result.error}`;
+      warning = t(
+        kind === "image"
+          ? "Immagine salvata, ma l'AI non l'ha letta: {error}"
+          : "Audio salvato, ma l'AI non l'ha letto: {error}",
+        { error: tr(result.error) },
+      );
   }
   await syncNote(noteId);
   return { warning };

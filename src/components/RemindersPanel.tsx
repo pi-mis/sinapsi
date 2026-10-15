@@ -28,8 +28,9 @@ import {
 } from "@/brain/client";
 import { groupOf, localToday, type ReminderGroup } from "@/brain/reminders";
 import { weeklyDigest } from "@/brain/brain.functions";
+import { locale, tr, useLang, useT, type Key, type Lang, type T } from "@/i18n";
 
-const GROUPS: { id: ReminderGroup; label: string }[] = [
+const GROUPS: { id: ReminderGroup; label: Key }[] = [
   { id: "scaduti", label: "Scaduti" },
   { id: "oggi", label: "Oggi" },
   { id: "settimana", label: "Questa settimana" },
@@ -45,10 +46,10 @@ function shift(date: string, days: number) {
   return localToday(d);
 }
 
-function humanDate(due: string, today: string) {
-  if (due === today) return "oggi";
-  if (due === shift(today, 1)) return "domani";
-  return new Date(`${due}T12:00:00`).toLocaleDateString("it-IT", {
+function humanDate(due: string, today: string, t: T, lang: Lang) {
+  if (due === today) return t("oggi");
+  if (due === shift(today, 1)) return t("domani");
+  return new Date(`${due}T12:00:00`).toLocaleDateString(locale(lang), {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -68,11 +69,13 @@ export function RemindersPanel({
   onSelectNote: (id: string) => void;
 }) {
   const qc = useQueryClient();
+  const t = useT();
+  const lang = useLang();
   const today = localToday();
   const reminders = useReminders();
   const digestFn = useServerFn(weeklyDigest);
   const digest = useQuery({
-    queryKey: ["digest", today],
+    queryKey: ["digest", today, lang],
     queryFn: () => digestFn({ data: { today } }),
     staleTime: 3_600_000,
     retry: false,
@@ -88,7 +91,7 @@ export function RemindersPanel({
       await job();
       await refresh();
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(tr((e as Error).message));
     } finally {
       setBusy(null);
     }
@@ -98,11 +101,11 @@ export function RemindersPanel({
   return (
     <aside
       className="panel-shadow fixed inset-0 z-40 flex flex-col overflow-hidden border border-border bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] md:inset-y-4 md:left-auto md:right-4 md:w-[400px] md:rounded-lg md:pb-0 md:pt-0"
-      aria-label="Promemoria"
+      aria-label={t("Promemoria")}
     >
       <header className="flex items-center justify-between border-b border-border p-5">
-        <h2 className="text-xl font-light">Il tuo cervello, in parallelo</h2>
-        <Button size="icon" variant="ghost" aria-label="Chiudi promemoria" onClick={onClose}>
+        <h2 className="text-xl font-light">{t("Il tuo cervello, in parallelo")}</h2>
+        <Button size="icon" variant="ghost" aria-label={t("Chiudi promemoria")} onClick={onClose}>
           <X />
         </Button>
       </header>
@@ -111,7 +114,7 @@ export function RemindersPanel({
           <div className="mb-2 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-sm">
               <Sparkles className="size-4 text-glow" />
-              La tua settimana
+              {t("La tua settimana")}
             </h3>
             <Button
               size="sm"
@@ -122,7 +125,7 @@ export function RemindersPanel({
                 setRegen(true);
                 try {
                   qc.setQueryData(
-                    ["digest", today],
+                    ["digest", today, lang],
                     await digestFn({ data: { today, force: true } }),
                   );
                 } finally {
@@ -131,13 +134,13 @@ export function RemindersPanel({
               }}
             >
               <RefreshCw className={regen ? "animate-spin" : ""} />
-              Rigenera
+              {t("Rigenera")}
             </Button>
           </div>
           {digest.isLoading || regen ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" />
-              Ripenso alla tua settimana…
+              {t("Ripenso alla tua settimana…")}
             </p>
           ) : digest.data?.text ? (
             <>
@@ -159,19 +162,22 @@ export function RemindersPanel({
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {digest.data?.error ||
-                "Il riepilogo arriva quando ci sono note nuove nella settimana."}
+              {tr(digest.data?.error ?? "") ||
+                t("Il riepilogo arriva quando ci sono note nuove nella settimana.")}
             </p>
           )}
         </section>
 
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm">Promemoria{items.length ? ` · ${items.length}` : ""}</h3>
+            <h3 className="text-sm">
+              {t("Promemoria")}
+              {items.length ? ` · ${items.length}` : ""}
+            </h3>
             {!adding && (
               <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
                 <Plus />
-                Aggiungi
+                {t("Aggiungi")}
               </Button>
             )}
           </div>
@@ -190,8 +196,8 @@ export function RemindersPanel({
             >
               <input
                 autoFocus
-                aria-label="Cosa ricordare"
-                placeholder="Cosa devo ricordarti?"
+                aria-label={t("Cosa ricordare")}
+                placeholder={t("Cosa devo ricordarti?")}
                 className={`${field} w-full`}
                 value={draft.text}
                 onChange={(e) => setDraft({ ...draft, text: e.target.value })}
@@ -199,14 +205,14 @@ export function RemindersPanel({
               <div className="flex gap-2">
                 <input
                   type="date"
-                  aria-label="Data"
+                  aria-label={t("Data")}
                   className={`${field} min-w-0 flex-1`}
                   value={draft.due}
                   onChange={(e) => setDraft({ ...draft, due: e.target.value })}
                 />
                 <input
                   type="time"
-                  aria-label="Ora"
+                  aria-label={t("Ora")}
                   className={`${field} w-28`}
                   value={draft.time}
                   disabled={!draft.due}
@@ -215,20 +221,22 @@ export function RemindersPanel({
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
-                  Annulla
+                  {t("Annulla")}
                 </Button>
                 <Button type="submit" size="sm" disabled={busy === "new"}>
-                  Salva
+                  {t("Salva")}
                 </Button>
               </div>
             </form>
           )}
-          {reminders.isLoading && <p className="text-sm text-muted-foreground">Caricamento…</p>}
+          {reminders.isLoading && (
+            <p className="text-sm text-muted-foreground">{t("Caricamento…")}</p>
+          )}
           {!reminders.isLoading && !items.length && (
             <p className="text-sm leading-6 text-muted-foreground">
-              Nessun promemoria. Scrivi nelle note cosa vuoi fare (“voglio iscrivermi al corso di
-              chitarra”, “consegna la tesi entro il 30”): l’AI li trova da sola e, se manca la data,
-              la cerca sul web.
+              {t(
+                "Nessun promemoria. Scrivi nelle note cosa vuoi fare (“voglio iscrivermi al corso di chitarra”, “consegna la tesi entro il 30”): l’AI li trova da sola e, se manca la data, la cerca sul web.",
+              )}
             </p>
           )}
           {GROUPS.map((g) => {
@@ -239,7 +247,7 @@ export function RemindersPanel({
                 <h4
                   className={`mb-1.5 text-xs ${g.id === "scaduti" ? "text-destructive" : "text-muted-foreground"}`}
                 >
-                  {g.label}
+                  {t(g.label)}
                 </h4>
                 <ul className="space-y-1.5">
                   {list.map((r) => {
@@ -252,8 +260,8 @@ export function RemindersPanel({
                         <div className="flex items-start gap-2.5">
                           <button
                             type="button"
-                            aria-label="Fatto"
-                            title="Fatto"
+                            aria-label={t("Fatto")}
+                            title={t("Fatto")}
                             disabled={busy === r.id}
                             onClick={() => act(r.id, () => setReminderStatus(r.id, "done"))}
                             className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border border-muted-foreground/50 hover:border-primary hover:bg-primary/20"
@@ -269,14 +277,14 @@ export function RemindersPanel({
                             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                               {p.due && (
                                 <span className={g.id === "scaduti" ? "text-destructive" : ""}>
-                                  {humanDate(p.due, today)}
+                                  {humanDate(p.due, today, t, lang)}
                                   {p.time ? ` · ${p.time}` : ""}
                                 </span>
                               )}
                               {p.lookup === "pending" && (
                                 <span className="flex items-center gap-1">
                                   <Globe className="size-3" />
-                                  cerco la data…
+                                  {t("cerco la data…")}
                                 </span>
                               )}
                               {p.lookup === "failed" && !p.due && (
@@ -287,14 +295,14 @@ export function RemindersPanel({
                                     act(r.id, async () =>
                                       toast.message(
                                         (await retryLookup(r.id))
-                                          ? "Data trovata."
-                                          : "Non ho trovato una data affidabile.",
+                                          ? t("Data trovata.")
+                                          : t("Non ho trovato una data affidabile."),
                                       ),
                                     )
                                   }
                                 >
                                   <Globe className="size-3" />
-                                  data non trovata · riprova
+                                  {t("data non trovata · riprova")}
                                 </button>
                               )}
                               {p.url && (
@@ -305,7 +313,7 @@ export function RemindersPanel({
                                   className="flex items-center gap-1 underline-offset-2 hover:underline"
                                 >
                                   <Globe className="size-3" />
-                                  fonte
+                                  {t("fonte")}
                                 </a>
                               )}
                               {r.note_id && r.noteTitle && (
@@ -314,7 +322,7 @@ export function RemindersPanel({
                                   className="max-w-[12rem] truncate underline-offset-2 hover:underline"
                                   onClick={() => onSelectNote(r.note_id!)}
                                 >
-                                  da “{r.noteTitle}”
+                                  {t("da “{title}”", { title: r.noteTitle })}
                                 </button>
                               )}
                             </p>
@@ -339,7 +347,7 @@ export function RemindersPanel({
                             }
                           >
                             <Clock />
-                            {p.due ? "+1 giorno" : "Domani"}
+                            {p.due ? t("+1 giorno") : t("Domani")}
                           </Button>
                           <Button
                             size="sm"
@@ -355,7 +363,7 @@ export function RemindersPanel({
                               )
                             }
                           >
-                            +1 settimana
+                            {t("+1 settimana")}
                           </Button>
                           <Button
                             size="sm"
@@ -364,7 +372,7 @@ export function RemindersPanel({
                             disabled={busy === r.id}
                             onClick={() => act(r.id, () => setReminderStatus(r.id, "dismissed"))}
                           >
-                            Ignora
+                            {t("Ignora")}
                           </Button>
                         </div>
                       </li>
@@ -385,6 +393,7 @@ export function RemindersPanel({
 /** Subscribing the phone's calendar to the private feed gives real notifications without an app. */
 function PhoneSection() {
   const qc = useQueryClient();
+  const t = useT();
   const token = useQuery({ queryKey: ["feed-token"], queryFn: () => feedToken(false) });
   const [busy, setBusy] = useState(false);
   const [permission, setPermission] = useState(() =>
@@ -394,9 +403,9 @@ function PhoneSection() {
     setBusy(true);
     try {
       qc.setQueryData(["feed-token"], rotate ? await rotateFeedToken() : await feedToken(true));
-      if (rotate) toast.success("Nuovo link creato: quello vecchio non funziona più.");
+      if (rotate) toast.success(t("Nuovo link creato: quello vecchio non funziona più."));
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(tr((e as Error).message));
     } finally {
       setBusy(false);
     }
@@ -405,12 +414,12 @@ function PhoneSection() {
     <section className="space-y-3 border-t border-border pt-5">
       <h3 className="flex items-center gap-2 text-sm">
         <BellRing className="size-4" />
-        Notifiche sul telefono
+        {t("Notifiche sul telefono")}
       </h3>
       <p className="text-xs leading-5 text-muted-foreground">
-        Iscrivi il calendario del telefono ai tuoi promemoria: arrivano come eventi con un avviso
-        (alle 9 del giorno stesso, o 30 minuti prima se c’è un orario), anche quando Sinapsi è
-        chiusa.
+        {t(
+          "Iscrivi il calendario del telefono ai tuoi promemoria: arrivano come eventi con un avviso (alle 9 del giorno stesso, o 30 minuti prima se c’è un orario), anche quando Sinapsi è chiusa.",
+        )}
       </p>
       {token.data ? (
         <div className="space-y-2">
@@ -427,24 +436,25 @@ function PhoneSection() {
               onClick={async () => {
                 await navigator.clipboard.writeText(feedUrl(token.data!));
                 toast.success(
-                  "Link copiato. In Google Calendar dal computer: Altri calendari → + → Da URL.",
+                  t("Link copiato. In Google Calendar dal computer: Altri calendari → + → Da URL."),
                 );
               }}
             >
               <Copy />
-              Copia link (Google, Outlook)
+              {t("Copia link (Google, Outlook)")}
             </Button>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            Il link è privato: chi lo ha vede i tuoi promemoria. Funziona dall’indirizzo pubblicato
-            dell’app.{" "}
+            {t(
+              "Il link è privato: chi lo ha vede i tuoi promemoria. Funziona dall’indirizzo pubblicato dell’app.",
+            )}{" "}
             <button
               type="button"
               className="underline underline-offset-2"
               disabled={busy}
               onClick={() => void create(true)}
             >
-              Crea un nuovo link
+              {t("Crea un nuovo link")}
             </button>
           </p>
         </div>
@@ -456,7 +466,7 @@ function PhoneSection() {
           onClick={() => void create()}
         >
           <CalendarPlus />
-          Collega al calendario del telefono
+          {t("Collega al calendario del telefono")}
         </Button>
       )}
       {permission !== "unsupported" && permission !== "granted" && (
@@ -466,7 +476,7 @@ function PhoneSection() {
           className="text-xs text-muted-foreground"
           onClick={async () => setPermission(await Notification.requestPermission())}
         >
-          Avvisami anche nel browser quando apro Sinapsi
+          {t("Avvisami anche nel browser quando apro Sinapsi")}
         </Button>
       )}
     </section>

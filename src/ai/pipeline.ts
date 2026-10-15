@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { embed, isConstrainedDevice, noteText } from "./embed";
 import { chooseK, hueForIndex, kmeans, representatives } from "./cluster";
@@ -35,7 +36,7 @@ export async function countPending(): Promise<number> {
     .from("notes")
     .select("id", { count: "exact", head: true })
     .in("ai_status", ["pending", "skipped"]);
-  if (error) throw new Error("Impossibile leggere lo stato delle note.");
+  if (error) throw new Error(t("Impossibile leggere lo stato delle note."));
   return count ?? 0;
 }
 
@@ -54,14 +55,14 @@ async function linkNote(id: string, vector: string): Promise<number | null> {
     match_count: LINK_CANDIDATES,
     exclude_id: id,
   });
-  if (error) throw new Error("Ricerca dei vicini non disponibile.");
+  if (error) throw new Error(t("Ricerca dei vicini non disponibile."));
   const neighbours = pickNeighbours(matches ?? []);
   const { error: delError } = await supabase
     .from("edges")
     .delete()
     .eq("kind", "semantic")
     .or(`a.eq.${id},b.eq.${id}`);
-  if (delError) throw new Error("Impossibile aggiornare le connessioni.");
+  if (delError) throw new Error(t("Impossibile aggiornare le connessioni."));
   if (neighbours.length) {
     const rows = neighbours.map((m) => {
       const [a, b] = canonicalPair(id, m.id);
@@ -75,7 +76,7 @@ async function linkNote(id: string, vector: string): Promise<number | null> {
       };
     });
     const { error: upError } = await supabase.from("edges").upsert(rows, { onConflict: "a,b" });
-    if (upError) throw new Error("Impossibile salvare le connessioni.");
+    if (upError) throw new Error(t("Impossibile salvare le connessioni."));
   }
   // A new note joins the constellation of its closest neighbour until the next reclustering.
   const nearest = neighbours[0];
@@ -138,7 +139,7 @@ export async function processPending(report: (step: PipelineStep) => void): Prom
       .in("ai_status", ["pending", "skipped"])
       .order("created_at")
       .limit(BATCH);
-    if (error) throw new Error("Impossibile leggere le note da collegare.");
+    if (error) throw new Error(t("Impossibile leggere le note da collegare."));
     const batch = (notes ?? []).filter((n) => !seen.has(n.id));
     if (!batch.length) break;
     batch.forEach((n) => seen.add(n.id));
@@ -211,7 +212,7 @@ async function loadEmbedded(): Promise<EmbeddedRow[]> {
       .not("embedding", "is", null)
       .order("id")
       .range(from, from + 499);
-    if (error) throw new Error("Impossibile leggere i vettori delle note.");
+    if (error) throw new Error(t("Impossibile leggere i vettori delle note."));
     out.push(...(data as EmbeddedRow[]));
     if (data.length < 500) return out;
   }
@@ -290,11 +291,11 @@ export async function recluster(
         .from("notes")
         .update(patch)
         .in("id", ids.slice(i, i + 150));
-      if (error) throw new Error("Impossibile salvare le costellazioni.");
+      if (error) throw new Error(t("Impossibile salvare le costellazioni."));
     }
   }
   const { error: delError } = await supabase.from("clusters").delete().gte("cluster_id", 0);
-  if (delError) throw new Error("Impossibile aggiornare le costellazioni.");
+  if (delError) throw new Error(t("Impossibile aggiornare le costellazioni."));
   const { error } = await supabase.from("clusters").insert(
     groups.map((g, index) => {
       const named = labels.find((l) => l.id === g.id);
@@ -307,6 +308,6 @@ export async function recluster(
       };
     }),
   );
-  if (error) throw new Error("Impossibile salvare le costellazioni.");
+  if (error) throw new Error(t("Impossibile salvare le costellazioni."));
   return groups.length;
 }

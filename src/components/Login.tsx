@@ -5,6 +5,8 @@ import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { buildDemoGraph } from "@/graph/demo";
+import { getLang, useLang, useT } from "@/i18n";
+import { LangSwitch } from "./LangSwitch";
 
 const GraphScene = lazy(() => import("@/graph/GraphScene"));
 const noop = () => {};
@@ -24,7 +26,9 @@ export function Login() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reduced, setReduced] = useState(false);
-  const demo = useMemo(buildDemoGraph, []);
+  const t = useT();
+  const lang = useLang();
+  const demo = useMemo(() => buildDemoGraph(lang), [lang]);
 
   useEffect(() => {
     setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -40,33 +44,42 @@ export function Login() {
           email,
           options: { emailRedirectTo: window.location.origin },
         });
-        if (error) throw new Error("Non sono riuscito a inviare il link. Riprova.");
+        if (error) throw new Error(t("Non sono riuscito a inviare il link. Riprova."));
         setNotice(
-          "Controlla la posta: ti ho inviato un link per entrare. Aprilo su questo dispositivo.",
+          t("Controlla la posta: ti ho inviato un link per entrare. Aprilo su questo dispositivo."),
         );
       } else if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error)
           throw new Error(
             error.message.toLowerCase().includes("confirm")
-              ? "Prima conferma l'indirizzo email con il link che ti ho inviato (controlla anche lo spam)."
-              : "Email o password non corrette. Se finora entravi con il link, entra con il link e imposta una password dal menu.",
+              ? t(
+                  "Prima conferma l'indirizzo email con il link che ti ho inviato (controlla anche lo spam).",
+                )
+              : t(
+                  "Email o password non corrette. Se finora entravi con il link, entra con il link e imposta una password dal menu.",
+                ),
           );
       } else {
-        if (password.length < 8) throw new Error("Scegli una password di almeno 8 caratteri.");
+        if (password.length < 8) throw new Error(t("Scegli una password di almeno 8 caratteri."));
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: window.location.origin, data: { lang: getLang() } },
         });
-        if (error) throw new Error("Non sono riuscito a creare l'account. Riprova.");
+        if (error) throw new Error(t("Non sono riuscito a creare l'account. Riprova."));
         if (data.user && data.user.identities?.length === 0)
           setNotice(
-            "Esiste già un account con questa email: entra con il link, poi imposta una password dal menu ⋯.",
+            t(
+              "Esiste già un account con questa email: entra con il link, poi imposta una password dal menu ⋯.",
+            ),
           );
         else if (!data.session)
           setNotice(
-            `Quasi fatto! Ti ho inviato un link a ${email}: aprilo per attivare l'account (controlla anche lo spam), poi entra con email e password. Serve solo la prima volta.`,
+            t(
+              "Quasi fatto! Ti ho inviato un link a {email}: aprilo per attivare l'account (controlla anche lo spam), poi entra con email e password. Serve solo la prima volta.",
+              { email },
+            ),
           );
       }
     } catch (err) {
@@ -80,7 +93,7 @@ export function Login() {
     const r = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin,
     });
-    if (r.error) toast.error("Accesso con Google non riuscito.");
+    if (r.error) toast.error(t("Accesso con Google non riuscito."));
   };
 
   const field = "h-12 bg-card/80 text-base backdrop-blur sm:text-sm";
@@ -102,12 +115,15 @@ export function Login() {
       </Suspense>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent sm:bg-[radial-gradient(ellipse_at_center,transparent_0%,var(--background)_80%)] sm:opacity-70 lg:bg-gradient-to-r lg:from-background lg:via-background/20 lg:to-transparent lg:opacity-100" />
       <div className="relative w-full max-w-sm rounded-2xl border border-border/60 bg-background/60 p-5 shadow-2xl backdrop-blur-xl sm:p-6">
-        <div className="label-mono">Sinapsi</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="label-mono">Sinapsi</div>
+          <LangSwitch />
+        </div>
         <h1 className="mt-2 text-3xl font-extralight leading-tight text-foreground sm:mt-3 sm:text-4xl">
-          Ogni idea, <span className="text-glow">una luce</span>.
+          {t("Ogni idea,")} <span className="text-glow">{t("una luce")}</span>.
         </h1>
         <p className="mt-2 text-sm text-muted-foreground sm:mt-3">
-          Il tuo cervello digitale. Resterai collegato su questo dispositivo.
+          {t("Il tuo cervello digitale. Resterai collegato su questo dispositivo.")}
         </p>
 
         <form onSubmit={submit} className="mt-5 space-y-3 sm:mt-7">
@@ -115,7 +131,7 @@ export function Login() {
             type="email"
             required
             autoComplete="email"
-            placeholder="la-tua@email.it"
+            placeholder={t("la-tua@email.it")}
             aria-label="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -126,7 +142,7 @@ export function Login() {
               type="password"
               required
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              placeholder={mode === "signup" ? "Scegli una password" : "Password"}
+              placeholder={mode === "signup" ? t("Scegli una password") : "Password"}
               aria-label="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -135,12 +151,12 @@ export function Login() {
           )}
           <Button type="submit" disabled={busy} className="h-12 w-full text-base sm:text-sm">
             {busy
-              ? "Un momento…"
+              ? t("Un momento…")
               : mode === "signin"
-                ? "Entra"
+                ? t("Entra")
                 : mode === "signup"
-                  ? "Crea account"
-                  : "Inviami il link"}
+                  ? t("Crea account")
+                  : t("Inviami il link")}
           </Button>
         </form>
         {notice && (
@@ -156,7 +172,7 @@ export function Login() {
               className="underline-offset-4 hover:underline"
               onClick={() => setMode("signup")}
             >
-              Nuovo qui? Crea un account
+              {t("Nuovo qui? Crea un account")}
             </button>
           ) : (
             <button
@@ -164,7 +180,7 @@ export function Login() {
               className="underline-offset-4 hover:underline"
               onClick={() => setMode("signin")}
             >
-              Entra con la password
+              {t("Entra con la password")}
             </button>
           )}
           {mode !== "link" && (
@@ -173,20 +189,22 @@ export function Login() {
               className="underline-offset-4 hover:underline"
               onClick={() => setMode("link")}
             >
-              Preferisci un link via email?
+              {t("Preferisci un link via email?")}
             </button>
           )}
         </div>
 
         <div className="my-4 flex items-center gap-3 sm:my-5 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />o<span className="h-px flex-1 bg-border" />
+          <span className="h-px flex-1 bg-border" />
+          {t("o")}
+          <span className="h-px flex-1 bg-border" />
         </div>
         <Button
           variant="outline"
           onClick={google}
           className="h-12 w-full bg-transparent text-base sm:text-sm"
         >
-          Continua con Google
+          {t("Continua con Google")}
         </Button>
       </div>
     </main>

@@ -1,3 +1,4 @@
+import { getLang, locale, t } from "@/i18n";
 /**
  * GitHub connector: each repository becomes a `progetto` neuron with its
  * description, README and latest commits. Calls go straight from the browser to
@@ -44,12 +45,12 @@ export async function gh<T>(
   });
   if (response.status === 403 || response.status === 429) {
     if (response.headers.get("x-ratelimit-remaining") === "0" || response.status === 429)
-      throw new RateLimited("Limite di GitHub raggiunto: riprendo al prossimo aggiornamento.");
+      throw new RateLimited(t("Limite di GitHub raggiunto: riprendo al prossimo aggiornamento."));
   }
-  if (response.status === 401) throw new Error("Il token GitHub non è valido o è scaduto.");
+  if (response.status === 401) throw new Error(t("Il token GitHub non è valido o è scaduto."));
   if (response.status === 404)
-    throw Object.assign(new Error("Non trovato su GitHub."), { status: 404 });
-  if (!response.ok) throw new Error("GitHub non risponde in questo momento.");
+    throw Object.assign(new Error(t("Non trovato su GitHub.")), { status: 404 });
+  if (!response.ok) throw new Error(t("GitHub non risponde in questo momento."));
   return (accept.includes("raw") ? await response.text() : await response.json()) as T;
 }
 
@@ -90,25 +91,27 @@ export function prettyName(name: string): string {
 /** The note text for a repository. */
 export function repoContent(repo: GitHubRepo, commits: GitHubCommit[]): string {
   const facts = [
-    repo.language && `Linguaggio: ${repo.language}`,
+    repo.language && t("Linguaggio: {name}", { name: repo.language }),
     repo.stargazers_count ? `★ ${repo.stargazers_count}` : null,
     repo.pushed_at &&
-      `ultimo aggiornamento ${new Date(repo.pushed_at).toLocaleDateString("it-IT")}`,
-    repo.archived ? "archiviato" : null,
+      t("ultimo aggiornamento {date}", {
+        date: new Date(repo.pushed_at).toLocaleDateString(locale(getLang())),
+      }),
+    repo.archived ? t("archiviato") : null,
   ].filter(Boolean);
   const lines = [
-    repo.description?.trim() || `Repository GitHub ${repo.full_name}.`,
+    repo.description?.trim() || t("Repository GitHub {name}.", { name: repo.full_name }),
     "",
     `Repository: ${repo.html_url}`,
-    ...(repo.homepage ? [`Sito: ${repo.homepage}`] : []),
+    ...(repo.homepage ? [t("Sito: {url}", { url: repo.homepage })] : []),
     ...(facts.length ? [facts.join(" · ")] : []),
-    ...(repo.topics?.length ? [`Temi: ${repo.topics.join(", ")}`] : []),
+    ...(repo.topics?.length ? [t("Temi: {topics}", { topics: repo.topics.join(", ") })] : []),
   ];
   if (commits.length) {
-    lines.push("", "Ultimi commit:");
+    lines.push("", t("Ultimi commit:"));
     for (const c of commits.slice(0, 10)) {
       const date = c.commit.author?.date
-        ? new Date(c.commit.author.date).toLocaleDateString("it-IT")
+        ? new Date(c.commit.author.date).toLocaleDateString(locale(getLang()))
         : "";
       lines.push(`- ${date} ${c.commit.message.split("\n")[0]!.slice(0, 120)}`.trim());
     }

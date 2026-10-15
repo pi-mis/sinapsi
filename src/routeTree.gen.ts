@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as ApiPaeseRouteImport } from './routes/api/paese'
 import { Route as ApiPromemoriaTokenRouteImport } from './routes/api/promemoria/$token'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPaeseRoute = ApiPaeseRouteImport.update({
+  id: '/api/paese',
+  path: '/api/paese',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPromemoriaTokenRoute = ApiPromemoriaTokenRouteImport.update({
   id: '/api/promemoria/$token',
   path: '/api/promemoria/$token',
@@ -32,30 +38,34 @@ const ApiPromemoriaTokenRoute = ApiPromemoriaTokenRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/api/paese': typeof ApiPaeseRoute
   '/api/promemoria/$token': typeof ApiPromemoriaTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/api/paese': typeof ApiPaeseRoute
   '/api/promemoria/$token': typeof ApiPromemoriaTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/api/paese': typeof ApiPaeseRoute
   '/api/promemoria/$token': typeof ApiPromemoriaTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/api/promemoria/$token'
+  fullPaths: '/' | '/admin' | '/api/paese' | '/api/promemoria/$token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/api/promemoria/$token'
-  id: '__root__' | '/' | '/admin' | '/api/promemoria/$token'
+  to: '/' | '/admin' | '/api/paese' | '/api/promemoria/$token'
+  id: '__root__' | '/' | '/admin' | '/api/paese' | '/api/promemoria/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  ApiPaeseRoute: typeof ApiPaeseRoute
   ApiPromemoriaTokenRoute: typeof ApiPromemoriaTokenRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/paese': {
+      id: '/api/paese'
+      path: '/api/paese'
+      fullPath: '/api/paese'
+      preLoaderRoute: typeof ApiPaeseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/promemoria/$token': {
       id: '/api/promemoria/$token'
       path: '/api/promemoria/$token'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  ApiPaeseRoute: ApiPaeseRoute,
   ApiPromemoriaTokenRoute: ApiPromemoriaTokenRoute,
 }
 export const routeTree = rootRouteImport

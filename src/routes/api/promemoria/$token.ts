@@ -29,13 +29,24 @@ export const Route = createFileRoute("/api/promemoria/$token")({
           .limit(500);
         const reminders = (data ?? []) as unknown as Reminder[];
         const app = new URL("/", request.url).href;
-        return new Response(remindersToIcs(reminders, app), {
-          headers: {
-            "Content-Type": "text/calendar; charset=utf-8",
-            "Content-Disposition": 'inline; filename="sinapsi-promemoria.ics"',
-            "Cache-Control": "private, max-age=900",
+        // The phone has no app cookie: the account's language decides.
+        const { data: owner } = await supabaseAdmin.auth.admin.getUserById(feed.user_id);
+        const english = owner.user?.user_metadata?.["lang"] === "en";
+        return new Response(
+          remindersToIcs(
+            reminders,
+            app,
+            new Date(),
+            english ? "Open in Sinapsi" : "Apri in Sinapsi",
+          ),
+          {
+            headers: {
+              "Content-Type": "text/calendar; charset=utf-8",
+              "Content-Disposition": 'inline; filename="sinapsi-promemoria.ics"',
+              "Cache-Control": "private, max-age=900",
+            },
           },
-        });
+        );
       },
     },
   },

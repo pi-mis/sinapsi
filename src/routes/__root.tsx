@@ -14,18 +14,20 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { registerServiceWorker } from "@/lib/offline";
+import { useT } from "@/i18n";
 
 function NotFoundComponent() {
+  const t = useT();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-extralight text-foreground">404</h1>
-        <p className="mt-4 text-sm text-muted-foreground">Questa pagina non esiste.</p>
+        <p className="mt-4 text-sm text-muted-foreground">{t("Questa pagina non esiste.")}</p>
         <Link
           to="/"
           className="mt-6 inline-block text-sm text-primary underline-offset-4 hover:underline"
         >
-          Torna al cervello
+          {t("Torna al cervello")}
         </Link>
       </div>
     </div>
@@ -35,14 +37,15 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
+  const t = useT();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-light text-foreground">Qualcosa non ha funzionato</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Riprova tra un attimo.</p>
+        <h1 className="text-xl font-light text-foreground">{t("Qualcosa non ha funzionato")}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t("Riprova tra un attimo.")}</p>
         <button
           onClick={() => {
             router.invalidate();
@@ -50,7 +53,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           }}
           className="mt-6 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
         >
-          Riprova
+          {t("Riprova")}
         </button>
       </div>
     </div>
@@ -89,7 +92,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="it">
+    <html lang="it" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

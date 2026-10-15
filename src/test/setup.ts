@@ -18,3 +18,7 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// Tests run in Italian, the language the strings are written in (see src/i18n).
+import { setLang } from "@/i18n";
+setLang("it");

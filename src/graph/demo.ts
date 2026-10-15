@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { runLayout } from "./layout";
 import type { GNode, GraphData } from "./data";
+import { t, type Lang } from "@/i18n";
+import { typeLabel } from "@/i18n/types";
 
 const CLUSTERS: { type: string; items: [string, string][] }[] = [
   {
@@ -101,6 +103,96 @@ const CLUSTERS: { type: string; items: [string, string][] }[] = [
   },
 ];
 
+/** The same demo notes in English, in the same order. */
+const CLUSTERS_EN: [string, string][][] = [
+  [
+    [
+      "The Name of the Rose",
+      "Eco uses a murder mystery to talk about forbidden knowledge and libraries.",
+    ],
+    ["Invisible Cities", "Calvino: every city is a way of looking at desire and memory."],
+    ["If on a Winter's Night a Traveller", "The reader as the hero, a novel made of beginnings."],
+    [
+      "Six Memos for the Next Millennium",
+      "Lightness, quickness, exactitude, visibility, multiplicity.",
+    ],
+    ["The Baron in the Trees", "Living in the trees as a form of stubborn freedom."],
+    ["Borges, Ficciones", "The Library of Babel: a universe made of books."],
+    ["Thinking, Fast and Slow", "System 1 and System 2: intuition versus reasoning."],
+    ["Sapiens", "Shared fictions make large-scale cooperation possible."],
+    ["The Little Prince", "What is essential is invisible to the eye."],
+    ["A Calvino quote", "Lightness isn't superficiality, it's gliding above things."],
+  ],
+  [
+    ["Grandma's carbonara", "Guanciale, pecorino, egg yolks. Never cream."],
+    ["Saffron risotto", "Toast the rice well, hot stock, stir in butter off the heat."],
+    ["Slow-rise bread", "48 hours in the fridge, 75% hydration."],
+    ["Pesto genovese", "Young basil, pine nuts, a marble mortar."],
+    ["Tiramisu", "Ladyfingers, cold coffee, mascarpone whipped with yolks."],
+    ["Sourdough starter", "Feed every 3 days, strong flour."],
+    ["Sunday ragù", "Six hours of slow cooking, milk at the end."],
+    ["Apulian focaccia", "Potatoes in the dough, cherry tomatoes and oregano."],
+    ["Pistachio gelato", "Bronte pistachio paste, little sugar."],
+    ["Idea: a spring dinner", "Asparagus, fresh peas, mint and lemon."],
+  ],
+  [
+    ["Lisbon, August", "Tram 28 at sunset, pastéis de nata still warm."],
+    ["Kyoto in autumn", "Red leaves at Tofuku-ji, silence in the temples."],
+    ["Iceland by camper van", "Northern lights seen from a petrol station car park."],
+    ["Path of the Gods", "From Bomerano to Nocelle, the sea under your feet."],
+    ["Berlin 2019", "The Mauerpark flea market on Sundays."],
+    ["Marrakech", "The souk at night, the smell of spices and leather."],
+    ["Dolomites, mountain hut", "Sunrise over the Tre Cime, scalding tea."],
+    ["Trip idea: Patagonia", "Torres del Paine in November, constant wind."],
+    ["Naples with Dad", "Fried pizza and Spaccanapoli on foot."],
+    ["Train to Edinburgh", "Northern coasts, reading, rain on the window."],
+  ],
+  [
+    ["Digital brain", "A web app that connects notes by meaning."],
+    ["Balcony vegetable garden", "Tomatoes, basil, drip irrigation."],
+    ["Monthly newsletter", "One letter a month about books and ideas."],
+    ["Bike restoration", "1970s steel frame, Campagnolo gears."],
+    ["Podcast with Luca", "Conversations about design and slowness."],
+    ["Learning Japanese", "Hiragana in two weeks, then basic kanji."],
+    ["Photo exhibition", "Twenty prints on the theme of thresholds."],
+    ["Grocery app", "A shared list that learns from habits."],
+    ["Running a half marathon", "12-week plan, three runs a week."],
+    ["Sorting the photo archive", "Tag by place and people."],
+  ],
+  [
+    ["Wabi-sabi", "The beauty of the imperfect and the impermanent."],
+    ["Stoicism", "Telling apart what depends on us from what doesn't."],
+    ["Flow (Csikszentmihalyi)", "Challenge and skill in balance create absorption."],
+    ["Memento mori", "Remembering death to live the present better."],
+    ["Zeigarnik effect", "Unfinished tasks stay in mind more than finished ones."],
+    ["Zettelkasten", "Atomic notes linked together make ideas emerge."],
+    ["Antifragility", "Systems that get better thanks to shocks."],
+    ["Ikigai", "What you love, what you're good at, what the world needs, what sustains you."],
+    ["Map and territory", "The model isn't the reality it describes."],
+    ["Idea: slowness as a method", "Slow down to see connections."],
+  ],
+  [
+    ["Kind of Blue", "Miles Davis, modal, recorded with almost no rehearsal."],
+    ["Ludovico Einaudi", "Minimalist piano, repetition and variation."],
+    ["Bach, Goldberg Variations", "Gould 1955 versus Gould 1981."],
+    ["Fabrizio De André", "La buona novella, the apocryphal Gospels set to music."],
+    ["Brian Eno, Ambient 1", "Music for airports, listening without attention."],
+    ["Radiohead, In Rainbows", "Released as pay-what-you-want."],
+    ["Ryuichi Sakamoto", "async: found sounds, illness and time."],
+    ["A night at the Arena", "Aida in summer, the stones still warm."],
+    ["Playlist for writing", "Ambient, solo piano, no vocals."],
+    ["Learning the guitar", "Open chords, then fingerstyle."],
+  ],
+];
+
+/** Demo clusters with titles and texts in the requested language. */
+function clusters(lang: Lang) {
+  return CLUSTERS.map((c, ci) => ({
+    type: c.type,
+    items: lang === "en" ? CLUSTERS_EN[ci]! : c.items,
+  }));
+}
+
 function rand(seed: number) {
   let s = seed;
   return () => {
@@ -110,9 +202,9 @@ function rand(seed: number) {
 }
 
 /** Inserts 60 demo notes in 6 clusters with edges and a precomputed layout. */
-export async function seedDemo(userId: string) {
+export async function seedDemo(userId: string, lang: Lang) {
   const r = rand(42);
-  const notes = CLUSTERS.flatMap((c, ci) =>
+  const notes = clusters(lang).flatMap((c, ci) =>
     c.items.map(([title, content]) => ({
       id: crypto.randomUUID(),
       user_id: userId,
@@ -156,22 +248,23 @@ export async function seedDemo(userId: string) {
     return { ...n, pos_x: p[0], pos_y: p[1], pos_z: p[2] };
   });
   const { error } = await supabase.from("notes").insert(rows);
-  if (error) throw new Error("Impossibile creare le note demo");
+  if (error) throw new Error(t("Impossibile creare le note demo"));
   const { error: e2 } = await supabase.from("edges").insert(edges);
-  if (e2) throw new Error("Impossibile creare le connessioni demo");
+  if (e2) throw new Error(t("Impossibile creare le connessioni demo"));
 }
 
 export async function clearDemo() {
   const { error } = await supabase.from("notes").delete().eq("is_demo", true);
-  if (error) throw new Error("Impossibile cancellare le note demo");
+  if (error) throw new Error(t("Impossibile cancellare le note demo"));
 }
 
 /**
  * A purely local demo graph (no database): the demo notes arranged in six
  * constellations. Used as the living background of the login screen.
  */
-export function buildDemoGraph(): GraphData {
+export function buildDemoGraph(lang: Lang = "it"): GraphData {
   const r = rand(7);
+  const CLUSTERS = clusters(lang);
   const gauss = () => Math.sqrt(-2 * Math.log(r() + 1e-9)) * Math.cos(2 * Math.PI * r());
   const hues = [0.48, 0.1, 0.72, 0.33, 0.93, 0.58];
   const nodes: GNode[] = CLUSTERS.flatMap((c, ci) => {
@@ -211,7 +304,7 @@ export function buildDemoGraph(): GraphData {
     demoCount: nodes.length,
     constellations: CLUSTERS.map((c, ci) => ({
       id: 100 + ci,
-      label: c.type,
+      label: typeLabel(c.type, lang),
       summary: null,
       hue: hues[ci]!,
       count: c.items.length,

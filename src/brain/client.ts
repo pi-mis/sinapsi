@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { extractIntents, lookupDeadline } from "./brain.functions";
@@ -11,7 +12,7 @@ export async function listReminders(): Promise<(Reminder & { noteTitle: string |
     .eq("status", "open")
     .order("run_after")
     .limit(300);
-  if (error) throw new Error("Impossibile leggere i promemoria.");
+  if (error) throw new Error(t("Impossibile leggere i promemoria."));
   return (data ?? []).map((r) => ({
     id: r.id,
     note_id: r.note_id,
@@ -33,21 +34,19 @@ export async function addReminder(
     time,
     source: "manuale",
   };
-  const { error } = await supabase
-    .from("jobs")
-    .insert({
-      kind: "reminder",
-      status: "open",
-      note_id: noteId,
-      payload: payload as unknown as Json,
-      run_after: runAfter(due, time),
-    });
-  if (error) throw new Error("Impossibile salvare il promemoria.");
+  const { error } = await supabase.from("jobs").insert({
+    kind: "reminder",
+    status: "open",
+    note_id: noteId,
+    payload: payload as unknown as Json,
+    run_after: runAfter(due, time),
+  });
+  if (error) throw new Error(t("Impossibile salvare il promemoria."));
 }
 
 export async function setReminderStatus(id: string, status: "done" | "dismissed" | "open") {
   const { error } = await supabase.from("jobs").update({ status }).eq("id", id);
-  if (error) throw new Error("Impossibile aggiornare il promemoria.");
+  if (error) throw new Error(t("Impossibile aggiornare il promemoria."));
 }
 
 export async function rescheduleReminder(
@@ -60,7 +59,7 @@ export async function rescheduleReminder(
     .from("jobs")
     .update({ payload: payload as unknown as Json, run_after: runAfter(due, time) })
     .eq("id", r.id);
-  if (error) throw new Error("Impossibile spostare il promemoria.");
+  if (error) throw new Error(t("Impossibile spostare il promemoria."));
 }
 
 let scanning: Promise<void> = Promise.resolve();
@@ -79,7 +78,7 @@ export function scanNotes(ids: string[], onChanged: () => void) {
         const r = await extractIntents({ data: { noteId, today } });
         created += r.created;
         lookups.push(...r.lookups);
-        if ("error" in r && r.error && /limite/i.test(r.error)) break;
+        if ("error" in r && r.error && /limit/i.test(r.error)) break;
       } catch {
         /* the next save retries */
       }
@@ -112,7 +111,7 @@ export async function feedToken(create: boolean): Promise<string | null> {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   const token = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
   const { error } = await supabase.from("sources").insert({ kind: "reminder_feed", uri: token });
-  if (error) throw new Error("Impossibile creare il link del calendario.");
+  if (error) throw new Error(t("Impossibile creare il link del calendario."));
   return token;
 }
 

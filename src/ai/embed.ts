@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { EMBED_MAX_CHARS, MODEL_DIM } from "./config";
 import type { EmbedMessage, EmbedRequest } from "./embed.worker";
 
@@ -26,11 +27,16 @@ function getWorker(): Worker {
       if (!job) return;
       waiting.delete(msg.id);
       if (msg.type === "result") job.resolve(msg.vectors);
-      else job.reject(new Error(`Modello AI locale non disponibile: ${msg.message}`));
+      else
+        job.reject(
+          new Error(t("Modello AI locale non disponibile: {reason}", { reason: msg.message })),
+        );
     }
   };
   worker.onerror = (event) => {
-    const error = new Error(`Modello AI locale non disponibile: ${event.message}`);
+    const error = new Error(
+      t("Modello AI locale non disponibile: {reason}", { reason: event.message }),
+    );
     waiting.forEach((job) => job.reject(error));
     waiting.clear();
     worker?.terminate();
@@ -77,7 +83,7 @@ export async function embed(texts: string[], chunk = 8): Promise<number[][]> {
   for (let i = 0; i < texts.length; i += chunk) {
     const vectors = await run(texts.slice(i, i + chunk));
     for (const v of vectors) {
-      if (v.length !== MODEL_DIM) throw new Error("Dimensione del vettore inattesa.");
+      if (v.length !== MODEL_DIM) throw new Error(t("Dimensione del vettore inattesa."));
       out.push(v);
     }
   }

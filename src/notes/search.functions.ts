@@ -42,7 +42,7 @@ export const searchIdeas = createServerFn({ method: "POST" })
       return {
         results: [],
         answer: "",
-        error: error instanceof Error ? error.message : "Ricerca non disponibile.",
+        error: error instanceof Error ? error.message : "Ricerca non disponibile. Riprova.",
       };
     }
   });

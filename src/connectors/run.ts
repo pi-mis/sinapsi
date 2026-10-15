@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { summarizeForNote } from "@/attachments/kinds";
 import { canonicalPair } from "@/ai/vector";
@@ -78,7 +79,7 @@ export async function addGitHub(
   token: string | null,
   report: Progress,
 ) {
-  report("Controllo l'account GitHub…");
+  report(t("Controllo l'account GitHub…"));
   const cleanToken = token?.trim() || null;
   const who = cleanToken
     ? await gh<{ login: string }>("/user", cleanToken)
@@ -86,7 +87,7 @@ export async function addGitHub(
         `/users/${encodeURIComponent(username.trim().replace(/^@/, ""))}`,
         null,
       ).catch((e: { status?: number }) => {
-        throw e.status === 404 ? new Error("Utente GitHub non trovato.") : e;
+        throw e.status === 404 ? new Error(t("Utente GitHub non trovato.")) : e;
       });
   const { data: existing } = await supabase
     .from("sources")
@@ -101,13 +102,13 @@ export async function addGitHub(
     .insert({ kind: "github", uri: `github:${who.login}`, extracted_text: JSON.stringify(state) })
     .select("id")
     .single();
-  if (error) throw new Error("Impossibile salvare il collegamento a GitHub.");
+  if (error) throw new Error(t("Impossibile salvare il collegamento a GitHub."));
   return syncGitHub(userId, data.id, report, true);
 }
 
 export async function removeGitHub(id: string) {
   const { error } = await supabase.from("sources").delete().eq("id", id).eq("kind", "github");
-  if (error) throw new Error("Impossibile scollegare GitHub.");
+  if (error) throw new Error(t("Impossibile scollegare GitHub."));
 }
 
 /** Saves the repository's README as a text source of its note, then rebuilds the note's attachment text. */
@@ -124,14 +125,12 @@ async function refreshSources(noteId: string, repo: GitHubRepo, readme: string) 
         .insert({ kind: "text", uri: readmeUri, folder: noteId, extracted_text: readme });
   } else if (readmeRow) await supabase.from("sources").delete().eq("id", readmeRow.id);
   if (!rows?.some((r) => r.uri === repo.html_url))
-    await supabase
-      .from("sources")
-      .insert({
-        kind: "link",
-        uri: repo.html_url,
-        folder: noteId,
-        extracted_text: `${repo.full_name}\n${repo.description ?? ""}`.trim(),
-      });
+    await supabase.from("sources").insert({
+      kind: "link",
+      uri: repo.html_url,
+      folder: noteId,
+      extracted_text: `${repo.full_name}\n${repo.description ?? ""}`.trim(),
+    });
   const { data: all } = await supabase
     .from("sources")
     .select("kind,uri,extracted_text")
@@ -165,10 +164,10 @@ async function syncRepo(userId: string, repo: GitHubRepo, token: string | null) 
   };
   if (existing) {
     const { error } = await supabase.from("notes").update(note).eq("id", id);
-    if (error) throw new Error("Impossibile aggiornare un progetto.");
+    if (error) throw new Error(t("Impossibile aggiornare un progetto."));
   } else {
     const { error } = await supabase.from("notes").insert({ id, ...note });
-    if (error) throw new Error("Impossibile salvare un progetto.");
+    if (error) throw new Error(t("Impossibile salvare un progetto."));
   }
   const enriched = await refreshSources(id, repo, cleanReadme(readmeRaw));
   await supabase.from("notes").update({ enriched }).eq("id", id);
@@ -233,7 +232,7 @@ export async function syncGitHub(
     .eq("id", sourceId)
     .single();
   const state = readState(row?.extracted_text ?? null);
-  report("Leggo i repository…");
+  report(t("Leggo i repository…"));
   const repos = await listRepos(state.login, state.token);
   const changed = repos.filter(
     (r) => force || state.seen[String(r.id)] !== (r.pushed_at ?? r.created_at),
@@ -254,7 +253,7 @@ export async function syncGitHub(
     }
   }
   if (projects.length) {
-    report("Collego i progetti alle note…");
+    report(t("Collego i progetti alle note…"));
     await linkMentions(projects);
   }
   state.lastSync = new Date().toISOString();

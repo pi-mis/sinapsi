@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { runLayout } from "./layout";
 
@@ -37,7 +38,7 @@ async function fetchAll<T>(table: "notes" | "edges", columns: string): Promise<T
       .from(table)
       .select(columns)
       .range(from, from + PAGE - 1);
-    if (error) throw new Error("Impossibile caricare il grafo");
+    if (error) throw new Error(t("Impossibile caricare il grafo"));
     out.push(...((data ?? []) as T[]));
     if (!data || data.length < PAGE) break;
   }
@@ -67,7 +68,7 @@ export async function loadGraph(): Promise<GraphData> {
     .filter((c) => c.hue != null)
     .map((c) => ({
       id: c.cluster_id,
-      label: c.label ?? `Costellazione ${c.cluster_id}`,
+      label: c.label ?? t("Costellazione {n}", { n: c.cluster_id }),
       summary: c.summary,
       hue: c.hue!,
       count: c.member_count,

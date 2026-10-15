@@ -55,6 +55,7 @@ export const extractIntents = createServerFn({ method: "POST" })
         .insert({ kind: "scan", note_id: note.id, status: "done", payload: { hash } });
 
     const { askGroq, extractJson } = await import("@/ai/groq.server");
+    const { languageName, st } = await import("@/i18n/lang.server");
     let parsed: { intenti?: unknown } | null = null;
     try {
       const answer = await askGroq(db, {
@@ -64,7 +65,7 @@ export const extractIntents = createServerFn({ method: "POST" })
           `Oggi è ${data.today}. Leggi una nota personale e trova solo intenzioni concrete, impegni o scadenze dell'autore (cose da fare, iscrizioni, candidature, appuntamenti, pagamenti, consegne).`,
           "Ignora riflessioni, ricordi passati e idee senza un'azione.",
           'Rispondi solo con JSON: {"intenti":[{"testo": string (azione breve all\'imperativo, max 12 parole, es. "Iscriviti al corso di chitarra"), "scadenza": "YYYY-MM-DD" | null (solo se la nota la indica o si deduce con certezza, es. "domani"), "ora": "HH:MM" | null, "cerca": string | null (se la scadenza manca ma esiste sicuramente una data ufficiale trovabile online, es. iscrizioni a un corso o bandi: una query web precisa in lingua adatta; altrimenti null)}]}.',
-          `Massimo ${MAX_PER_NOTE} intenti. Se non ce ne sono, {"intenti":[]}. ${NOT_INSTRUCTIONS}`,
+          `Scrivi "testo" in ${languageName()}. Massimo ${MAX_PER_NOTE} intenti. Se non ce ne sono, {"intenti":[]}. ${NOT_INSTRUCTIONS}`,
         ].join(" "),
         prompt: text.slice(0, 4000),
       });
@@ -74,7 +75,7 @@ export const extractIntents = createServerFn({ method: "POST" })
         created: 0,
         lookups: [],
         skipped: false,
-        error: error instanceof Error ? error.message : "AI non disponibile.",
+        error: error instanceof Error ? error.message : st("AI non disponibile."),
       };
     }
     const intents = (Array.isArray(parsed?.intenti) ? parsed.intenti : [])
@@ -174,6 +175,7 @@ export const lookupDeadline = createServerFn({ method: "POST" })
     const payload = row?.payload as ReminderPayload | null;
     if (!row || !payload?.query) return { found: false };
     const { searchWeb, extractLastJson } = await import("@/ai/groq.server");
+    const { languageName } = await import("@/i18n/lang.server");
     let result: { data?: unknown; fonte?: unknown; nota?: unknown } | null = null;
     try {
       const answer = await searchWeb(
@@ -182,7 +184,7 @@ export const lookupDeadline = createServerFn({ method: "POST" })
           `Oggi è ${data.today}. Cerca sul web la prossima scadenza o data utile per: "${payload.text}".`,
           `Query suggerita: ${payload.query}`,
           "Considera solo date future o di oggi, da fonti ufficiali se possibile.",
-          'Concludi la risposta con una sola riga JSON: {"data": "YYYY-MM-DD" | null, "fonte": "URL della pagina" | null, "nota": "dettaglio breve in italiano, es. orario o requisito" | null}',
+          `Concludi la risposta con una sola riga JSON: {"data": "YYYY-MM-DD" | null, "fonte": "URL della pagina" | null, "nota": "dettaglio breve in ${languageName()}, es. orario o requisito" | null}`,
         ].join("\n"),
       );
       result = extractLastJson(answer);
@@ -222,6 +224,8 @@ export const weeklyDigest = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const db = context.supabase;
     const week = weekKey(data.today);
+    const { languageName, requestLang, st } = await import("@/i18n/lang.server");
+    const lang = requestLang();
     const { data: cached } = await db
       .from("jobs")
       .select("id,payload")
@@ -231,10 +235,12 @@ export const weeklyDigest = createServerFn({ method: "POST" })
       .maybeSingle();
     const last = cached?.payload as {
       week?: string;
+      lang?: string;
       text?: string;
       notes?: { id: string; title: string }[];
     } | null;
-    if (last?.week === week && last.text && !data.force)
+    // The summary is cached per week and per language (it is written in the user's language).
+    if (last?.week === week && (last.lang ?? "it") === lang && last.text && !data.force)
       return { text: last.text, notes: last.notes ?? [], week, error: "" };
 
     const since = new Date(`${data.today}T00:00:00Z`);
@@ -275,7 +281,7 @@ export const weeklyDigest = createServerFn({ method: "POST" })
         text: "",
         notes: [],
         week,
-        error: "Questa settimana non ci sono ancora abbastanza note per un riepilogo.",
+        error: st("Questa settimana non ci sono ancora abbastanza note per un riepilogo."),
       };
     const label = new Map((clusters ?? []).map((c) => [c.cluster_id, c.label]));
     try {
@@ -284,7 +290,7 @@ export const weeklyDigest = createServerFn({ method: "POST" })
         model: "chat",
         maxOutputTokens: 1400,
         system: [
-          "Sei il cervello digitale di una persona e le scrivi il riepilogo della sua settimana, in italiano, con tono caldo e concreto.",
+          `Sei il cervello digitale di una persona e le scrivi il riepilogo della sua settimana, in ${languageName(lang)}, con tono caldo e concreto.`,
           "Usa SOLO i dati forniti. Struttura: 1) i temi su cui ha pensato di più (citando le costellazioni se utili); 2) uno o due collegamenti non ovvi tra note diverse, spiegando perché possono servirle; 3) cosa la aspetta nei prossimi giorni (promemoria ed eventi); 4) un suggerimento pratico per la settimana.",
           "Massimo 180 parole, elenchi puntati brevi. Cita le note che usi con [[id]]. Non inventare.",
           NOT_INSTRUCTIONS,
@@ -311,23 +317,21 @@ export const weeklyDigest = createServerFn({ method: "POST" })
       ].filter((id) => known.has(id));
       const text = answer.replace(
         CITATION,
-        (_, id: string) => `“${known.get(id.toLowerCase()) ?? "nota"}”`,
+        (_, id: string) => `“${known.get(id.toLowerCase()) ?? st("nota")}”`,
       );
       const notes = cited.map((id) => ({ id, title: known.get(id)! }));
-      await db
-        .from("jobs")
-        .insert({
-          kind: "digest",
-          status: "done",
-          payload: { week, text, notes } as unknown as Json,
-        });
+      await db.from("jobs").insert({
+        kind: "digest",
+        status: "done",
+        payload: { week, lang, text, notes } as unknown as Json,
+      });
       return { text, notes, week, error: "" };
     } catch (error) {
       return {
         text: "",
         notes: [],
         week,
-        error: error instanceof Error ? error.message : "AI non disponibile.",
+        error: error instanceof Error ? error.message : st("AI non disponibile."),
       };
     }
   });

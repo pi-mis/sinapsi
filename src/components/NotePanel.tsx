@@ -9,6 +9,8 @@ import { Button } from "./ui/button";
 import { readNote, deleteNote, type Note } from "@/notes/data";
 import type { GraphData, GNode } from "@/graph/data";
 import { toast } from "sonner";
+import { locale, tr, useLang, useT } from "@/i18n";
+import { useTypeLabel } from "@/i18n/types";
 export function NotePanel({
   id,
   data,
@@ -36,6 +38,9 @@ export function NotePanel({
   });
   const [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false);
+  const t = useT();
+  const lang = useLang();
+  const typeLabel = useTypeLabel();
   const idx = data.nodes.findIndex((n) => n.id === id);
   const linked = data.edges
     .filter((e) => e.a === idx || e.b === idx)
@@ -62,7 +67,7 @@ export function NotePanel({
                 {constellation.label} ·
               </span>
             )}
-            {note?.type ?? "nota"}
+            {typeLabel(note?.type ?? "nota")}
             {note?.is_private && <LockKeyhole className="size-3" />}
             {note?.pinned && <Pin className="size-3" />}
           </div>
@@ -70,29 +75,31 @@ export function NotePanel({
             {note?.title || data.nodes[idx]?.title}
           </h2>
         </div>
-        <Button onClick={onClose} aria-label="Chiudi nota" size="icon" variant="ghost">
+        <Button onClick={onClose} aria-label={t("Chiudi nota")} size="icon" variant="ghost">
           <X />
         </Button>
       </header>
       <div className="flex-1 space-y-6 overflow-y-auto p-5">
-        {isLoading && <p className="text-sm text-muted-foreground">Caricamento…</p>}
-        {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
+        {isLoading && <p className="text-sm text-muted-foreground">{t("Caricamento…")}</p>}
+        {error && <p className="text-sm text-destructive">{tr((error as Error).message)}</p>}
         {note && (
           <>
             <p className="text-xs text-muted-foreground">
-              {new Date(note.created_at).toLocaleDateString("it-IT")}
+              {new Date(note.created_at).toLocaleDateString(locale(lang))}
               {note.event_date &&
-                ` · Evento: ${new Date(note.event_date).toLocaleDateString("it-IT")}`}
+                ` · ${t("Evento: {date}", { date: new Date(note.event_date).toLocaleDateString(locale(lang)) })}`}
             </p>
             <section>
-              <h3 className="mb-3 text-xs text-muted-foreground">Originale</h3>
+              <h3 className="mb-3 text-xs text-muted-foreground">{t("Originale")}</h3>
               <p className="whitespace-pre-wrap break-words text-sm leading-7">{note.content}</p>
             </section>
             <Attachments noteId={id} isPrivate={note.is_private} onChanged={onContentChanged} />
           </>
         )}
         <section>
-          <h3 className="mb-2 text-xs text-muted-foreground">Connessioni · {linked.length}</h3>
+          <h3 className="mb-2 text-xs text-muted-foreground">
+            {t("Connessioni")} · {linked.length}
+          </h3>
           <ul className="space-y-1">
             {linked.map((l) => (
               <Synapse
@@ -111,10 +118,10 @@ export function NotePanel({
         <footer className="border-t border-border p-4">
           {confirm ? (
             <div className="space-y-3">
-              <p className="text-sm">Eliminare questa nota e le sue connessioni?</p>
+              <p className="text-sm">{t("Eliminare questa nota e le sue connessioni?")}</p>
               <div className="flex gap-2">
                 <Button variant="ghost" onClick={() => setConfirm(false)}>
-                  Annulla
+                  {t("Annulla")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -123,16 +130,16 @@ export function NotePanel({
                     setBusy(true);
                     try {
                       await deleteNote(id);
-                      toast.success("Nota eliminata");
+                      toast.success(t("Nota eliminata"));
                       onDeleted();
                     } catch (e) {
-                      toast.error((e as Error).message);
+                      toast.error(tr((e as Error).message));
                     } finally {
                       setBusy(false);
                     }
                   }}
                 >
-                  Elimina nota
+                  {t("Elimina nota")}
                 </Button>
               </div>
             </div>
@@ -140,12 +147,12 @@ export function NotePanel({
             <div className="flex justify-between">
               <Button variant="secondary" onClick={() => onEdit(note)}>
                 <Pencil />
-                Modifica
+                {t("Modifica")}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Elimina nota"
+                aria-label={t("Elimina nota")}
                 onClick={() => setConfirm(true)}
               >
                 <Trash2 />
@@ -173,6 +180,7 @@ function Synapse({
   onSelect: (id: string) => void;
 }) {
   const explain = useServerFn(explainSynapse);
+  const t = useT();
   const [state, setState] = useState<{ loading: boolean; text: string; error: string } | null>(
     null,
   );
@@ -181,9 +189,9 @@ function Synapse({
     setState({ loading: true, text: "", error: "" });
     try {
       const r = await explain({ data: { a: from, b: node.id } });
-      setState({ loading: false, text: r.explanation, error: r.error });
+      setState({ loading: false, text: r.explanation, error: tr(r.error) });
     } catch {
-      setState({ loading: false, text: "", error: "Spiegazione non disponibile." });
+      setState({ loading: false, text: "", error: t("Spiegazione non disponibile.") });
     }
   };
   return (
@@ -198,7 +206,11 @@ function Synapse({
         </Button>
         {(kind === "person" || kind === "thread" || kind === "project") && (
           <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-            {kind === "person" ? "persona" : kind === "project" ? "progetto" : "stessa chat"}
+            {kind === "person"
+              ? t("persona")
+              : kind === "project"
+                ? t("progetto")
+                : t("stessa chat")}
           </span>
         )}
         {kind === "semantic" && (
@@ -210,7 +222,7 @@ function Synapse({
             onClick={() => void ask()}
           >
             <Sparkles />
-            Perché?
+            {t("Perché?")}
           </Button>
         )}
       </div>
@@ -224,7 +236,7 @@ function Synapse({
         <p
           className={`mx-1 mt-2 text-xs leading-5 ${state.error ? "text-destructive" : "text-muted-foreground"}`}
         >
-          {state.loading ? "Rifletto sul collegamento…" : state.error || state.text}
+          {state.loading ? t("Rifletto sul collegamento…") : state.error || state.text}
         </p>
       )}
     </li>

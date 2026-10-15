@@ -1,3 +1,4 @@
+import { getLang, t } from "@/i18n";
 /** Events from an iCalendar file or feed (Google Calendar, iCloud, Outlook). */
 
 export type CalendarEvent = {
@@ -84,14 +85,18 @@ const MONTHS = [
 
 /** The note text for an event. */
 export function eventContent(e: CalendarEvent): string {
-  const when = `${e.start.getDate()} ${MONTHS[e.start.getMonth()]} ${e.start.getFullYear()}${
+  const day =
+    getLang() === "en"
+      ? e.start.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+      : `${e.start.getDate()} ${MONTHS[e.start.getMonth()]} ${e.start.getFullYear()}`;
+  const when = `${day}${
     e.allDay
       ? ""
       : `, ${String(e.start.getHours()).padStart(2, "0")}:${String(e.start.getMinutes()).padStart(2, "0")}`
   }`;
   return [
-    `Quando: ${when}`,
-    e.location && `Dove: ${e.location}`,
+    t("Quando: {when}", { when }),
+    e.location && t("Dove: {place}", { place: e.location }),
     e.description && `\n${e.description.slice(0, 4000)}`,
   ]
     .filter(Boolean)

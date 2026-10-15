@@ -1,3 +1,4 @@
+import { languageName, st } from "@/i18n/lang.server";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { APICallError, generateText } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -27,7 +28,9 @@ export class AiUnavailableError extends Error {}
 function groqKey() {
   const apiKey = process.env["GROQ_API_KEY_SINAPSI"] ?? process.env["GROQ_API_KEY"];
   if (!apiKey)
-    throw new AiUnavailableError("L'AI non è configurata: manca il secret GROQ_API_KEY_SINAPSI.");
+    throw new AiUnavailableError(
+      st("L'AI non è configurata: manca il secret GROQ_API_KEY_SINAPSI."),
+    );
   return apiKey;
 }
 
@@ -50,18 +53,21 @@ async function consumeQuota(client: SupabaseClient<Database>) {
   const cap = settings?.daily_ai_cap ?? DEFAULT_DAILY_CAP;
   const used = usage?.calls ?? 0;
   if (used >= cap)
-    throw new AiUnavailableError(`Hai raggiunto il limite di ${cap} richieste AI per oggi.`);
+    throw new AiUnavailableError(
+      st("Hai raggiunto il limite di {cap} richieste AI per oggi.", { cap }),
+    );
   await client.from("ai_usage").upsert({ day, calls: used + 1 }, { onConflict: "user_id,day" });
 }
 
 function describe(error: unknown): string {
   if (APICallError.isInstance(error)) {
-    if (error.statusCode === 401) return "La chiave Groq non è valida.";
+    if (error.statusCode === 401) return st("La chiave Groq non è valida.");
     if (error.statusCode === 429)
-      return "Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto.";
-    if (error.statusCode && error.statusCode >= 500) return "Groq non risponde in questo momento.";
+      return st("Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto.");
+    if (error.statusCode && error.statusCode >= 500)
+      return st("Groq non risponde in questo momento.");
   }
-  return error instanceof Error ? error.message : "AI non disponibile.";
+  return error instanceof Error ? error.message : st("AI non disponibile.");
 }
 
 export async function askGroq(
@@ -85,7 +91,7 @@ export async function askGroq(
       providerOptions: { groq: { reasoningEffort: "low" } },
     });
     const out = text.trim();
-    if (!out) throw new AiUnavailableError("L'AI non ha restituito una risposta.");
+    if (!out) throw new AiUnavailableError(st("L'AI non ha restituito una risposta."));
     return out;
   } catch (error) {
     if (error instanceof AiUnavailableError) throw error;
@@ -111,7 +117,7 @@ export async function describeImage(
           content: [
             {
               type: "text",
-              text: "Descrivi in italiano questa immagine per un archivio personale di ricordi, in 2-4 frasi: cosa mostra, luogo o contesto se riconoscibili, persone (senza identificarle), oggetti importanti. Se contiene testo leggibile, trascrivilo alla fine dopo 'Testo:'. Non inventare dettagli.",
+              text: `Descrivi in ${languageName()} questa immagine per un archivio personale di ricordi, in 2-4 frasi: cosa mostra, luogo o contesto se riconoscibili, persone (senza identificarle), oggetti importanti. Se contiene testo leggibile, trascrivilo alla fine dopo '${st("Testo")}:'. Non inventare dettagli.`,
             },
             { type: "image", image: new URL(imageUrl) },
           ],
@@ -142,9 +148,9 @@ export async function transcribeAudio(
   });
   if (response.status === 429)
     throw new AiUnavailableError(
-      "Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto.",
+      st("Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto."),
     );
-  if (!response.ok) throw new AiUnavailableError("Trascrizione non riuscita.");
+  if (!response.ok) throw new AiUnavailableError(st("Trascrizione non riuscita."));
   const body = (await response.json()) as { text?: string };
   return (body.text ?? "").trim();
 }
@@ -172,14 +178,14 @@ export async function searchWeb(client: SupabaseClient<Database>, prompt: string
       }),
     });
   } catch {
-    throw new AiUnavailableError("La ricerca sul web non ha risposto in tempo.");
+    throw new AiUnavailableError(st("La ricerca sul web non ha risposto in tempo."));
   }
   if (response.status === 429)
     throw new AiUnavailableError(
-      "Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto.",
+      st("Limite gratuito di Groq raggiunto per ora: riprova tra qualche minuto."),
     );
   if (!response.ok)
-    throw new AiUnavailableError("Ricerca sul web non disponibile con questa chiave Groq.");
+    throw new AiUnavailableError(st("Ricerca sul web non disponibile con questa chiave Groq."));
   const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   return (body.choices?.[0]?.message?.content ?? "").trim();
 }

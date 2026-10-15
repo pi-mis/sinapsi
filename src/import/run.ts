@@ -1,3 +1,4 @@
+import { getLang, t } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { summarizeForNote } from "@/attachments/kinds";
 import type { Json } from "@/integrations/supabase/types";
@@ -32,7 +33,10 @@ const MONTHS = [
   "novembre",
   "dicembre",
 ];
-const humanDay = (d: Date) => `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+const humanDay = (d: Date) =>
+  getLang() === "en"
+    ? d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+    : `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 
 async function existingIds(ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();
@@ -41,7 +45,7 @@ async function existingIds(ids: string[]): Promise<Set<string>> {
       .from("notes")
       .select("id")
       .in("id", ids.slice(i, i + 150));
-    if (error) throw new Error("Impossibile leggere le note esistenti.");
+    if (error) throw new Error(t("Impossibile leggere le note esistenti."));
     data.forEach((r) => found.add(r.id));
   }
   return found;
@@ -62,7 +66,7 @@ async function addEdges(edges: Edge[]) {
     const { error } = await supabase
       .from("edges")
       .upsert(rows.slice(i, i + 500), { onConflict: "a,b", ignoreDuplicates: true });
-    if (error) throw new Error("Impossibile salvare i collegamenti.");
+    if (error) throw new Error(t("Impossibile salvare i collegamenti."));
   }
 }
 
@@ -84,7 +88,7 @@ async function ensurePerson(
       is_private: true,
       ai_status: "pending",
     });
-    if (error) throw new Error("Impossibile creare la persona.");
+    if (error) throw new Error(t("Impossibile creare la persona."));
   }
   return id;
 }
@@ -112,11 +116,15 @@ export async function importWhatsApp(options: {
   const others = options.participants.filter((p) => p !== me);
   const hub =
     others.length === 1
-      ? await ensurePerson(userId, others[0]!, `Persona dalla chat WhatsApp «${chatName}».`)
+      ? await ensurePerson(
+          userId,
+          others[0]!,
+          t("Persona dalla chat WhatsApp «{chat}».", { chat: chatName }),
+        )
       : await ensurePerson(
           userId,
           chatName,
-          `Chat di gruppo WhatsApp con ${others.slice(0, 12).join(", ")}.`,
+          t("Chat di gruppo WhatsApp con {names}.", { names: others.slice(0, 12).join(", ") }),
           "gruppo",
         );
 
@@ -130,9 +138,16 @@ export async function importWhatsApp(options: {
     edges.push({ a: id, b: hub, score: 0.6, kind: "person" });
     if (i > 0) edges.push({ a: ids[i - 1]!, b: id, score: 0.5, kind: "thread" });
     if (existing.has(id)) continue;
-    report(`Conversazione ${i + 1} di ${sessions.length}`, i, sessions.length);
+    report(
+      t("Conversazione {n} di {total}", { n: i + 1, total: sessions.length }),
+      i,
+      sessions.length,
+    );
     const text = transcript(session, 10000);
-    const header = `Chat WhatsApp con ${chatName} · ${humanDay(session.start)}`;
+    const header = t("Chat WhatsApp con {chat} · {day}", {
+      chat: chatName,
+      day: humanDay(session.start),
+    });
     let title = `${chatName} · ${humanDay(session.start)}`;
     let content = `${header}\n\n${text.slice(0, 800)}${text.length > 800 ? "…" : ""}`;
     let commitments: { text: string; due: string | null }[] = [];
@@ -143,7 +158,7 @@ export async function importWhatsApp(options: {
       if (result.error) {
         aiFailures++;
         // A rate or daily limit would fail every remaining call: finish locally instead.
-        if (/limite/i.test(result.error)) useAI = false;
+        if (/limit/i.test(result.error)) useAI = false;
       } else {
         title = result.title || title;
         commitments = result.commitments;
@@ -154,7 +169,7 @@ export async function importWhatsApp(options: {
           ...(result.commitments.length
             ? [
                 "",
-                "Impegni:",
+                t("Impegni:"),
                 ...result.commitments.map((c) => `- ${c.text}${c.due ? ` (${c.due})` : ""}`),
               ]
             : []),
@@ -172,7 +187,7 @@ export async function importWhatsApp(options: {
       ai_status: "pending",
       enriched: summarizeForNote([{ kind: "text", uri, extracted_text: text }]),
     });
-    if (error) throw new Error("Impossibile salvare una conversazione.");
+    if (error) throw new Error(t("Impossibile salvare una conversazione."));
     await supabase.from("sources").insert({ kind: "text", uri, folder: id, extracted_text: text });
     // Commitments that are still ahead become reminders linked to the conversation.
     const upcoming = commitments.filter((c) => !c.due || c.due >= today);
@@ -188,7 +203,7 @@ export async function importWhatsApp(options: {
       );
     created++;
   }
-  report("Collego le conversazioni…");
+  report(t("Collego le conversazioni…"));
   await addEdges(edges);
   return { created, skipped: sessions.length - created, aiFailures };
 }
@@ -196,9 +211,9 @@ export async function importWhatsApp(options: {
 // ---------- Contacts and people ----------
 
 export async function importContacts(userId: string, contacts: ContactInput[], report: Progress) {
-  report("Leggo la rubrica esistente…");
+  report(t("Leggo la rubrica esistente…"));
   const { data: current, error } = await supabase.from("contacts").select("full_name,email");
-  if (error) throw new Error("Impossibile leggere i contatti.");
+  if (error) throw new Error(t("Impossibile leggere i contatti."));
   const known = new Set(
     (current ?? []).flatMap(
       (c) => [normalizeName(c.full_name), c.email?.toLowerCase()].filter(Boolean) as string[],
@@ -211,9 +226,9 @@ export async function importContacts(userId: string, contacts: ContactInput[], r
     return true;
   });
   for (let i = 0; i < fresh.length; i += 500) {
-    report("Salvo i contatti…", i, fresh.length);
+    report(t("Salvo i contatti…"), i, fresh.length);
     const { error: insertError } = await supabase.from("contacts").insert(fresh.slice(i, i + 500));
-    if (insertError) throw new Error("Impossibile salvare i contatti.");
+    if (insertError) throw new Error(t("Impossibile salvare i contatti."));
   }
   const linked = await linkPeople(userId, report);
   return { added: fresh.length, duplicates: contacts.length - fresh.length, linked };
@@ -233,7 +248,7 @@ function ngrams(text: string): Set<string> {
  * neurons linked to those notes. Single first names are ignored (too ambiguous).
  */
 export async function linkPeople(userId: string, report: Progress): Promise<number> {
-  report("Cerco le persone nelle note…");
+  report(t("Cerco le persone nelle note…"));
   const { data: contacts } = await supabase
     .from("contacts")
     .select("full_name,company,position,email,url");
@@ -249,7 +264,7 @@ export async function linkPeople(userId: string, report: Progress): Promise<numb
       .eq("is_demo", false)
       .order("id")
       .range(from, from + 499);
-    if (error) throw new Error("Impossibile leggere le note.");
+    if (error) throw new Error(t("Impossibile leggere le note."));
     for (const n of data)
       if (n.type !== "persona" && n.type !== "gruppo")
         notes.push({
@@ -316,12 +331,12 @@ export async function importEvents(userId: string, events: CalendarEvent[], repo
     return !c || c.title !== r.title || c.content !== r.content || c.event_date !== r.event_date;
   });
   for (let i = 0; i < changed.length; i += 200) {
-    report("Salvo gli eventi…", i, changed.length);
+    report(t("Salvo gli eventi…"), i, changed.length);
     const { error } = await supabase.from("notes").upsert(
       changed.slice(i, i + 200).map((r) => ({ ...r, ai_status: "pending" })),
       { onConflict: "id" },
     );
-    if (error) throw new Error("Impossibile salvare gli eventi.");
+    if (error) throw new Error(t("Impossibile salvare gli eventi."));
   }
   return {
     saved: changed.length,
@@ -366,7 +381,7 @@ async function syncFeed(
   feed: { id: string; url: string; name?: string },
   report: Progress,
 ) {
-  report("Scarico il calendario…");
+  report(t("Scarico il calendario…"));
   const { ics } = await fetchCalendar({ data: { url: feed.url } });
   const now = Date.now();
   const events = parseIcs(ics).filter((e) => {
@@ -389,7 +404,7 @@ export async function addCalendar(userId: string, url: string, report: Progress)
     .insert({ kind: "calendar", uri: url.trim(), extracted_text: "{}" })
     .select("id")
     .single();
-  if (error) throw new Error("Impossibile salvare il calendario.");
+  if (error) throw new Error(t("Impossibile salvare il calendario."));
   try {
     return await syncFeed(userId, { id: data.id, url: url.trim() }, report);
   } catch (e) {
@@ -400,7 +415,7 @@ export async function addCalendar(userId: string, url: string, report: Progress)
 
 export async function removeCalendar(id: string) {
   const { error } = await supabase.from("sources").delete().eq("id", id).eq("kind", "calendar");
-  if (error) throw new Error("Impossibile rimuovere il calendario.");
+  if (error) throw new Error(t("Impossibile rimuovere il calendario."));
 }
 
 /** Syncs linked calendars that have not been synced for a while (or all, with `force`). Returns notes saved. */

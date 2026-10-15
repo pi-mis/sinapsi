@@ -17,15 +17,18 @@ import { buildDemoGraph } from "@/graph/demo";
 import type { GraphData } from "@/graph/data";
 import type { ViewCommand } from "@/graph/GraphScene";
 import { Button } from "./ui/button";
+import { LangSwitch } from "./LangSwitch";
+import { useLang, useT, type Key } from "@/i18n";
 
 const GraphScene = lazy(() => import("@/graph/GraphScene"));
 
 /**
  * First-run tour, played over a live demo brain that grows, lights up and
  * dissolves. Seven short scenes; tap or arrow keys to move, Esc to skip.
+ * The first scene also lets the user pick the language (Italian or English).
  */
 
-const LABELS: Record<string, string> = {
+const LABELS: Record<string, Key> = {
   libro: "Libri",
   ricetta: "Ricette",
   ricordo: "Ricordi",
@@ -39,11 +42,11 @@ const ICELAND = "demo-2-2";
 
 type Scene = {
   duration: number;
-  title: string;
-  body: string;
+  title: Key;
+  body: Key;
   focus?: string;
   highlight?: (data: GraphData) => string[];
-  visual?: "content" | "chat" | "connectors" | "reminder";
+  visual?: "language" | "content" | "chat" | "connectors" | "reminder";
 };
 
 const clusterIds = (type: string) => (data: GraphData) =>
@@ -51,9 +54,10 @@ const clusterIds = (type: string) => (data: GraphData) =>
 
 const SCENES: Scene[] = [
   {
-    duration: 5600,
+    duration: 7000,
     title: "Ciao, questo è Sinapsi.",
     body: "Il tuo cervello ha 86 miliardi di neuroni e dimentica comunque dove hai messo le chiavi. Questo ne ha quanti ne vuoi e non dimentica niente.",
+    visual: "language",
   },
   {
     duration: 7000,
@@ -97,7 +101,7 @@ const SCENES: Scene[] = [
 ];
 
 /** The demo brain limited to its first `count` neurons (constellations appear one after another). */
-function prefix(full: GraphData, count: number): GraphData {
+function prefix(full: GraphData, count: number, label: (key: Key) => string): GraphData {
   const nodes = full.nodes.slice(0, count);
   const ids = new Set(nodes.map((n) => n.id));
   return {
@@ -108,7 +112,10 @@ function prefix(full: GraphData, count: number): GraphData {
       .filter((c) => nodes.filter((n) => n.cluster === c.id && ids.has(n.id)).length >= 2)
       .map((c) => ({
         ...c,
-        label: LABELS[full.nodes.find((n) => n.cluster === c.id)?.type ?? ""] ?? c.label,
+        label: (() => {
+          const key = LABELS[full.nodes.find((n) => n.cluster === c.id)?.type ?? ""];
+          return key ? label(key) : c.label;
+        })(),
       })),
   };
 }
@@ -134,7 +141,9 @@ function useTyped(text: string, active: boolean, delay = 600, speed = 26) {
 }
 
 export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }) {
-  const full = useMemo(buildDemoGraph, []);
+  const t = useT();
+  const lang = useLang();
+  const full = useMemo(() => buildDemoGraph(lang), [lang]);
   const reduced = useMemo(
     () =>
       typeof window !== "undefined" &&
@@ -145,6 +154,11 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
   const [count, setCount] = useState(reduced ? full.nodes.length : 0);
   const [command, setCommand] = useState<ViewCommand>({ action: "reset", tick: 0 });
   const [leaving, setLeaving] = useState(false);
+  // Picking a language restarts the scene, so there is time to read it again.
+  const [restart, setRestart] = useState(0);
+  useEffect(() => {
+    setRestart((r) => r + 1);
+  }, [lang]);
   const scene = SCENES[index]!;
   const last = index === SCENES.length - 1;
 
@@ -189,7 +203,7 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
   useEffect(() => {
     const timer = setTimeout(next, scene.duration);
     return () => clearTimeout(timer);
-  }, [index, scene.duration, next]);
+  }, [index, scene.duration, next, restart]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -203,7 +217,7 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
     return () => window.removeEventListener("keydown", onKey);
   }, [next, back, finish]);
 
-  const data = useMemo(() => prefix(full, Math.max(count, 1)), [full, count]);
+  const data = useMemo(() => prefix(full, Math.max(count, 1), t), [full, count, t]);
   const highlighted = useMemo(
     () => (scene.highlight ? scene.highlight(full) : null),
     [scene, full],
@@ -214,7 +228,7 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
       className={`onboarding fixed inset-0 z-[60] bg-background transition-opacity duration-700 ${leaving ? "opacity-0" : "opacity-100"}`}
       role="dialog"
       aria-modal="true"
-      aria-label="Introduzione a Sinapsi"
+      aria-label={t("Introduzione a Sinapsi")}
     >
       <Suspense fallback={null}>
         <div className="pointer-events-none absolute inset-0">
@@ -236,13 +250,13 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
       {/* Tap zones: left half goes back, right half goes on. */}
       <button
         type="button"
-        aria-label="Indietro"
+        aria-label={t("Indietro")}
         className="absolute inset-y-0 left-0 w-1/3 cursor-w-resize"
         onClick={back}
       />
       <button
         type="button"
-        aria-label="Avanti"
+        aria-label={t("Avanti")}
         className="absolute inset-y-0 right-0 w-2/3 cursor-e-resize"
         onClick={next}
       />
@@ -252,7 +266,7 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
           {SCENES.map((s, i) => (
             <div key={i} className="h-0.5 flex-1 overflow-hidden rounded-full bg-foreground/15">
               <div
-                key={i === index ? `run-${index}` : `idle-${i}`}
+                key={i === index ? `run-${index}-${restart}` : `idle-${i}`}
                 className={`h-full rounded-full bg-foreground/80 ${i === index ? "onboarding-progress" : ""}`}
                 style={{
                   width: i < index ? "100%" : i === index ? undefined : "0%",
@@ -262,6 +276,7 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
             </div>
           ))}
         </div>
+        {index > 0 && <LangSwitch className="pointer-events-auto hidden sm:inline-flex" />}
         <Button
           size="sm"
           variant="ghost"
@@ -269,32 +284,33 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
           onClick={() => finish()}
         >
           <X />
-          Salta
+          {t("Salta")}
         </Button>
       </div>
 
       <section
-        key={index}
+        key={`${index}-${lang}`}
         className="pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-[max(2rem,env(safe-area-inset-bottom))] sm:bottom-auto sm:left-0 sm:top-1/2 sm:w-[min(34rem,46vw)] sm:-translate-y-1/2 sm:px-12 sm:pb-0"
         aria-live="polite"
       >
         <h2 className="onboarding-in text-[2rem] font-extralight leading-[1.1] tracking-tight sm:text-5xl">
-          {scene.title}
+          {t(scene.title)}
         </h2>
         <p
           className="onboarding-in mt-4 max-w-[32rem] text-[15px] leading-relaxed text-muted-foreground sm:text-base"
           style={{ animationDelay: "120ms" }}
         >
-          {scene.body}
+          {t(scene.body)}
         </p>
         <div className="onboarding-in mt-6" style={{ animationDelay: "260ms" }}>
+          {scene.visual === "language" && <LanguageChoice />}
           {scene.visual === "content" && <ContentKinds />}
           {scene.visual === "chat" && <ChatDemo />}
           {scene.visual === "connectors" && <Connectors />}
           {scene.visual === "reminder" && <ReminderDemo />}
           {last && (
             <Button className="pointer-events-auto h-11 px-6" onClick={() => finish(true)}>
-              Crea la tua prima idea
+              {t("Crea la tua prima idea")}
             </Button>
           )}
         </div>
@@ -303,12 +319,23 @@ export function Onboarding({ onDone }: { onDone: (createNote: boolean) => void }
   );
 }
 
+function LanguageChoice() {
+  const t = useT();
+  return (
+    <div className="pointer-events-auto space-y-2">
+      <p className="text-xs text-muted-foreground">{t("Scegli la lingua")}</p>
+      <LangSwitch className="[&_button]:px-4 [&_button]:py-1.5 [&_button]:text-sm" />
+    </div>
+  );
+}
+
 function ContentKinds() {
+  const t = useT();
   const kinds = [
-    { icon: Type, label: "Testo" },
-    { icon: ImageIcon, label: "Foto" },
+    { icon: Type, label: t("Testo") },
+    { icon: ImageIcon, label: t("Foto") },
     { icon: FileText, label: "PDF" },
-    { icon: Mic, label: "Vocali" },
+    { icon: Mic, label: t("Vocali") },
     { icon: Link2, label: "Link" },
   ];
   return (
@@ -328,9 +355,11 @@ function ContentKinds() {
 }
 
 function ChatDemo() {
-  const question = "Cosa avevo pensato per la Patagonia?";
-  const answer =
-    "Torres del Paine a novembre, con il vento costante. È collegata a “Islanda in camper”: a quanto pare ti piacciono i posti dove il cappello vola via.";
+  const t = useT();
+  const question = t("Cosa avevo pensato per la Patagonia?");
+  const answer = t(
+    "Torres del Paine a novembre, con il vento costante. È collegata a “Islanda in camper”: a quanto pare ti piacciono i posti dove il cappello vola via.",
+  );
   const q = useTyped(question, true, 500, 34);
   const a = useTyped(answer, q.length === question.length, 500, 18);
   return (
@@ -351,10 +380,11 @@ function ChatDemo() {
 }
 
 function Connectors() {
+  const t = useT();
   const sources = [
     { icon: MessageCircle, label: "WhatsApp" },
-    { icon: CalendarDays, label: "Calendario" },
-    { icon: Users, label: "Contatti" },
+    { icon: CalendarDays, label: t("Calendario") },
+    { icon: Users, label: t("Contatti") },
   ];
   return (
     <div className="space-y-3">
@@ -378,7 +408,7 @@ function Connectors() {
         <div className="text-sm leading-5">
           <div>sinapsi</div>
           <div className="text-xs text-muted-foreground">
-            README, 12 commit questa settimana, aggiornato da solo
+            {t("README, 12 commit questa settimana, aggiornato da solo")}
           </div>
         </div>
       </div>
@@ -388,6 +418,7 @@ function Connectors() {
 
 function ReminderDemo() {
   const [found, setFound] = useState(false);
+  const t = useT();
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     timer.current = setTimeout(() => setFound(true), 2200);
@@ -400,15 +431,15 @@ function ReminderDemo() {
     >
       <Bell className="mt-0.5 size-5 shrink-0 text-glow" />
       <div className="text-sm leading-5">
-        <div>Iscriviti al corso di chitarra</div>
+        <div>{t("Iscriviti al corso di chitarra")}</div>
         <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Globe className="size-3.5" />
           {found ? (
             <span className="onboarding-in">
-              Scadenza trovata: le iscrizioni chiudono il 15 novembre
+              {t("Scadenza trovata: le iscrizioni chiudono il 15 novembre")}
             </span>
           ) : (
-            "Cerco la scadenza sul web…"
+            t("Cerco la scadenza sul web…")
           )}
         </div>
       </div>

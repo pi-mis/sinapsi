@@ -1,3 +1,4 @@
+import { st } from "@/i18n/lang.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { BUCKET, MAX_BYTES, MAX_EXTRACT } from "../kinds";
 
@@ -18,7 +19,7 @@ export function ensureBucket(): Promise<void> {
       fileSizeLimit: MAX_BYTES,
     });
     if (error && !/already exists/i.test(error.message))
-      throw new Error("Archivio dei file non disponibile.");
+      throw new Error(st("Archivio dei file non disponibile."));
   })();
   bucketReady.catch(() => {
     bucketReady = null;
@@ -29,7 +30,7 @@ export function ensureBucket(): Promise<void> {
 export async function signedUploadUrl(path: string) {
   await ensureBucket();
   const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data) throw new Error("Impossibile preparare il caricamento.");
+  if (error || !data) throw new Error(st("Impossibile preparare il caricamento."));
   return { path: data.path, token: data.token };
 }
 
@@ -37,7 +38,7 @@ export async function signedUrls(paths: string[], seconds = 3600): Promise<Recor
   if (!paths.length) return {};
   await ensureBucket();
   const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrls(paths, seconds);
-  if (error || !data) throw new Error("Impossibile aprire gli allegati.");
+  if (error || !data) throw new Error(st("Impossibile aprire gli allegati."));
   const out: Record<string, string> = {};
   for (const item of data) if (item.path && item.signedUrl) out[item.path] = item.signedUrl;
   return out;
@@ -73,10 +74,10 @@ export function publicUrl(raw: string): URL {
   try {
     url = new URL(raw.trim().replace(/^webcals?:\/\//i, "https://"));
   } catch {
-    throw new Error("Il link non è valido.");
+    throw new Error(st("Il link non è valido."));
   }
   if (!/^https?:$/.test(url.protocol) || BLOCKED_HOST.test(url.hostname))
-    throw new Error("Questo link non si può aprire.");
+    throw new Error(st("Questo link non si può aprire."));
   return url;
 }
 

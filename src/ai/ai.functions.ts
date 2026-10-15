@@ -19,6 +19,7 @@ export const labelConstellations = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const usable = data.clusters.filter((c) => c.titles.length > 0);
+    const { languageName, st } = await import("@/i18n/lang.server");
     if (!usable.length)
       return { labels: [] as { id: number; label: string; summary: string }[], error: "" };
     try {
@@ -26,7 +27,7 @@ export const labelConstellations = createServerFn({ method: "POST" })
       const text = await askGroq(context.supabase, {
         model: "fast",
         maxOutputTokens: 900,
-        system: `Dai un nome a gruppi di note personali. Per ogni gruppo scrivi un'etichetta in italiano di 1-3 parole che colga il tema comune, e una sintesi di massimo 12 parole. ${NOTES_ARE_DATA} Rispondi solo con JSON: {"clusters":[{"id":number,"label":string,"summary":string}]}`,
+        system: `Dai un nome a gruppi di note personali. Per ogni gruppo scrivi un'etichetta in ${languageName()} di 1-3 parole che colga il tema comune, e una sintesi di massimo 12 parole. ${NOTES_ARE_DATA} Rispondi solo con JSON: {"clusters":[{"id":number,"label":string,"summary":string}]}`,
         prompt: JSON.stringify({ gruppi: usable.map((c) => ({ id: c.id, titoli: c.titles })) }),
       });
       const parsed = extractJson<{
@@ -45,7 +46,10 @@ export const labelConstellations = createServerFn({ method: "POST" })
       );
       return { labels, error: "" };
     } catch (error) {
-      return { labels: [], error: error instanceof Error ? error.message : "AI non disponibile." };
+      return {
+        labels: [],
+        error: error instanceof Error ? error.message : st("AI non disponibile."),
+      };
     }
   });
 
@@ -55,6 +59,7 @@ export const explainSynapse = createServerFn({ method: "POST" })
   .inputValidator(z.object({ a: z.string().uuid(), b: z.string().uuid() }))
   .handler(async ({ data, context }) => {
     const [a, b] = canonicalPair(data.a, data.b);
+    const { languageName, st } = await import("@/i18n/lang.server");
     const { data: edge } = await context.supabase
       .from("edges")
       .select("id,explanation")
@@ -67,11 +72,12 @@ export const explainSynapse = createServerFn({ method: "POST" })
       .select("id,title,content,is_private")
       .in("id", [a, b]);
     if (error || notes?.length !== 2)
-      return { explanation: "", error: "Impossibile leggere le due note." };
+      return { explanation: "", error: st("Impossibile leggere le due note.") };
     if (notes.some((n) => n.is_private))
       return {
-        explanation:
+        explanation: st(
           "Collegamento trovato sul tuo dispositivo: una delle due note è privata, quindi l'AI non la legge.",
+        ),
         error: "",
       };
     try {
@@ -79,7 +85,7 @@ export const explainSynapse = createServerFn({ method: "POST" })
       const explanation = await askGroq(context.supabase, {
         model: "fast",
         maxOutputTokens: 400,
-        system: `Spieghi a una persona perché due sue note sono collegate. Scrivi in italiano, in una o due frasi, cosa le unisce concretamente e perché collegarle può esserle utile. Non inventare fatti che non sono nelle note. ${NOTES_ARE_DATA}`,
+        system: `Spieghi a una persona perché due sue note sono collegate. Scrivi in ${languageName()}, in una o due frasi, cosa le unisce concretamente e perché collegarle può esserle utile. Non inventare fatti che non sono nelle note. ${NOTES_ARE_DATA}`,
         prompt: JSON.stringify(
           notes.map((n) => ({ titolo: n.title, testo: n.content.slice(0, 1200) })),
         ),
@@ -87,6 +93,9 @@ export const explainSynapse = createServerFn({ method: "POST" })
       if (edge) await context.supabase.from("edges").update({ explanation }).eq("id", edge.id);
       return { explanation, error: "" };
     } catch (err) {
-      return { explanation: "", error: err instanceof Error ? err.message : "AI non disponibile." };
+      return {
+        explanation: "",
+        error: err instanceof Error ? err.message : st("AI non disponibile."),
+      };
     }
   });

@@ -93,7 +93,7 @@ export function weekKey(today: string): string {
 
 /** Cheap filter before spending an AI call: does the text talk about plans, deadlines or dates? */
 const INTENT_CUES =
-  /\b(voglio|vorrei|devo|dovrei|dobbiamo|bisogna|ricorda|ricordami|iscriv\w*|candidat\w*|applica\w*|application|deadline|scadenz\w*|entro|prenot\w*|appuntament\w*|esame|consegn\w*|pagare|rinnov\w*|chiamare|scrivere a|comprare|organizzare|domani|dopodomani|settimana prossima|mese prossimo|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica|gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|todo|to do)\b|\b\d{1,2}[/.]\d{1,2}([/.]\d{2,4})?\b/i;
+  /\b(voglio|vorrei|devo|dovrei|dobbiamo|bisogna|ricorda|ricordami|iscriv\w*|candidat\w*|applica\w*|application|deadline|scadenz\w*|entro|prenot\w*|appuntament\w*|esame|consegn\w*|pagare|rinnov\w*|chiamare|scrivere a|comprare|organizzare|domani|dopodomani|settimana prossima|mese prossimo|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica|gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|todo|to do|i want to|i need to|i have to|i should|i must|we need to|remember to|remind me|sign up|register|apply|due (?:by|on)|by (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|the end)|book (?:a|the)|appointment|exam|submit|pay|renew|call|buy|tomorrow|next week|next month|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|june|july|august|september|october|november|december)\b|\b\d{1,2}[/.]\d{1,2}([/.]\d{2,4})?\b/i;
 
 export function mayContainIntents(text: string): boolean {
   return INTENT_CUES.test(text);
@@ -114,7 +114,12 @@ function fold(line: string) {
 }
 
 /** A calendar the user's phone can subscribe to: one event per dated, open reminder, with an alarm. */
-export function remindersToIcs(reminders: Reminder[], appUrl: string, now = new Date()): string {
+export function remindersToIcs(
+  reminders: Reminder[],
+  appUrl: string,
+  now = new Date(),
+  openLabel = "Apri in Sinapsi",
+): string {
   const stamp = now
     .toISOString()
     .replace(/[-:]/g, "")
@@ -146,7 +151,7 @@ export function remindersToIcs(reminders: Reminder[], appUrl: string, now = new 
       );
     }
     lines.push(fold(`SUMMARY:${icsEscape(p.text)}`));
-    const description = [p.detail, p.url, `Apri in Sinapsi: ${appUrl}`].filter(Boolean).join("\n");
+    const description = [p.detail, p.url, `${openLabel}: ${appUrl}`].filter(Boolean).join("\n");
     lines.push(fold(`DESCRIPTION:${icsEscape(description)}`));
     if (p.url) lines.push(fold(`URL:${p.url}`));
     // All-day: 09:00 that morning; timed: 30 minutes before.

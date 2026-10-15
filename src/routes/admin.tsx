@@ -8,6 +8,8 @@ import { Login } from "@/components/Login";
 import { VerifyEmail } from "@/components/VerifyEmail";
 import { Button } from "@/components/ui/button";
 import { adminOverview, amIAdmin, type AdminUser } from "@/admin/admin.functions";
+import { getLang, locale, tr, useT, type T } from "@/i18n";
+import { LangSwitch } from "@/components/LangSwitch";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -26,15 +28,20 @@ function AdminRoute() {
 
 const day = (iso: string | null) =>
   iso
-    ? new Date(iso).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" })
+    ? new Date(iso).toLocaleDateString(locale(getLang()), {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
     : "—";
-const ago = (iso: string | null) => {
-  if (!iso) return "mai";
+const ago = (t: T, iso: string | null) => {
+  if (!iso) return t("mai");
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000);
-  return days <= 0 ? "oggi" : days === 1 ? "ieri" : `${days} giorni fa`;
+  return days <= 0 ? t("oggi") : days === 1 ? t("ieri") : t("{n} giorni fa", { n: days });
 };
 
 function AdminPage() {
+  const t = useT();
   const check = useServerFn(amIAdmin);
   const overview = useServerFn(adminOverview);
   const access = useQuery({ queryKey: ["am-i-admin"], queryFn: () => check() });
@@ -54,11 +61,11 @@ function AdminPage() {
   const all = data.data?.users ?? [];
   const week = Date.now() - 7 * 86400_000;
   const stats = [
-    { label: "Utenti", value: all.length },
-    { label: "Email verificate", value: all.filter((u) => u.verified).length },
-    { label: "Note totali", value: all.reduce((s, u) => s + u.notes, 0) },
+    { label: t("Utenti"), value: all.length },
+    { label: t("Email verificate"), value: all.filter((u) => u.verified).length },
+    { label: t("Note totali"), value: all.reduce((s, u) => s + u.notes, 0) },
     {
-      label: "Attivi negli ultimi 7 giorni",
+      label: t("Attivi negli ultimi 7 giorni"),
       value: all.filter((u) => u.lastActivity && new Date(u.lastActivity).getTime() > week).length,
     },
   ];
@@ -73,37 +80,44 @@ function AdminPage() {
               className="mb-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-3.5" />
-              Torna al cervello
+              {t("Torna al cervello")}
             </Link>
             <h1 className="flex items-center gap-2 text-2xl font-light">
               <Users className="size-6 text-muted-foreground" />
-              Amministrazione
+              {t("Amministrazione")}
             </h1>
           </div>
-          {access.data?.admin && (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={data.isFetching}
-              onClick={() => void data.refetch()}
-            >
-              <RefreshCw className={data.isFetching ? "animate-spin" : ""} />
-              Aggiorna
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <LangSwitch />
+            {access.data?.admin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={data.isFetching}
+                onClick={() => void data.refetch()}
+              >
+                <RefreshCw className={data.isFetching ? "animate-spin" : ""} />
+                {t("Aggiorna")}
+              </Button>
+            )}
+          </div>
         </header>
 
-        {access.isLoading && <p className="text-sm text-muted-foreground">Controllo i permessi…</p>}
+        {access.isLoading && (
+          <p className="text-sm text-muted-foreground">{t("Controllo i permessi…")}</p>
+        )}
         {access.data && !access.data.admin && (
           <p className="max-w-lg text-sm leading-6 text-muted-foreground">
-            Questa pagina è riservata agli amministratori. Se sei tu il proprietario, aggiungi la
-            tua email al secret <code className="font-mono">SINAPSI_ADMIN_EMAILS</code> in Lovable
-            Cloud e verifica l’indirizzo.
+            {t(
+              "Questa pagina è riservata agli amministratori. Se sei tu il proprietario, aggiungi la tua email al secret",
+            )}{" "}
+            <code className="font-mono">SINAPSI_ADMIN_EMAILS</code>{" "}
+            {t("in Lovable Cloud e verifica l’indirizzo.")}
           </p>
         )}
         {(access.error || data.error) && (
           <p className="text-sm text-destructive">
-            {((access.error || data.error) as Error).message}
+            {tr(((access.error || data.error) as Error).message)}
           </p>
         )}
 
@@ -123,15 +137,17 @@ function AdminPage() {
             <div className="mb-4 flex items-center gap-2 rounded-md border border-input bg-card px-3">
               <Search className="size-4 text-muted-foreground" />
               <input
-                aria-label="Cerca per email"
-                placeholder="Cerca per email…"
+                aria-label={t("Cerca per email")}
+                placeholder={t("Cerca per email…")}
                 className="h-10 flex-1 bg-transparent text-base outline-none sm:text-sm"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               />
             </div>
 
-            {data.isLoading && <p className="text-sm text-muted-foreground">Carico gli utenti…</p>}
+            {data.isLoading && (
+              <p className="text-sm text-muted-foreground">{t("Carico gli utenti…")}</p>
+            )}
 
             {/* Desktop: table */}
             <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
@@ -140,12 +156,12 @@ function AdminPage() {
                   <tr>
                     {[
                       "Email",
-                      "Registrato",
-                      "Ultimo accesso",
-                      "Note",
-                      "Collegamenti",
-                      "Ultima attività",
-                      "Richieste AI (30 gg)",
+                      t("Registrato"),
+                      t("Ultimo accesso"),
+                      t("Note"),
+                      t("Collegamenti"),
+                      t("Ultima attività"),
+                      t("Richieste AI (30 gg)"),
                     ].map((h) => (
                       <th key={h} className="whitespace-nowrap px-4 py-3 font-normal">
                         {h}
@@ -163,12 +179,12 @@ function AdminPage() {
                         {day(u.createdAt)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                        {ago(u.lastSignIn)}
+                        {ago(t, u.lastSignIn)}
                       </td>
                       <td className="px-4 py-3 tabular-nums">{u.notes}</td>
                       <td className="px-4 py-3 tabular-nums">{u.connections}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                        {ago(u.lastActivity)}
+                        {ago(t, u.lastActivity)}
                       </td>
                       <td className="px-4 py-3 tabular-nums">{u.aiCalls30d}</td>
                     </tr>
@@ -184,31 +200,35 @@ function AdminPage() {
                   <EmailCell user={u} />
                   <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <dt className="text-muted-foreground">Note</dt>
+                      <dt className="text-muted-foreground">{t("Note")}</dt>
                       <dd className="text-base tabular-nums">{u.notes}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Collegamenti</dt>
+                      <dt className="text-muted-foreground">{t("Collegamenti")}</dt>
                       <dd className="text-base tabular-nums">{u.connections}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">AI (30 gg)</dt>
+                      <dt className="text-muted-foreground">{t("AI (30 gg)")}</dt>
                       <dd className="text-base tabular-nums">{u.aiCalls30d}</dd>
                     </div>
                   </dl>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    Registrato il {day(u.createdAt)} · ultimo accesso {ago(u.lastSignIn)} · attività{" "}
-                    {ago(u.lastActivity)}
+                    {t("Registrato il {date} · ultimo accesso {last} · attività {activity}", {
+                      date: day(u.createdAt),
+                      last: ago(t, u.lastSignIn),
+                      activity: ago(t, u.lastActivity),
+                    })}
                   </p>
                 </li>
               ))}
             </ul>
             {!data.isLoading && !users.length && (
-              <p className="text-sm text-muted-foreground">Nessun utente trovato.</p>
+              <p className="text-sm text-muted-foreground">{t("Nessun utente trovato.")}</p>
             )}
             <p className="mt-6 text-xs text-muted-foreground">
-              Vedi solo conteggi e dati dell’account, mai il contenuto delle note degli altri
-              utenti.
+              {t(
+                "Vedi solo conteggi e dati dell’account, mai il contenuto delle note degli altri utenti.",
+              )}
             </p>
           </>
         )}
@@ -218,21 +238,22 @@ function AdminPage() {
 }
 
 function EmailCell({ user }: { user: AdminUser }) {
+  const t = useT();
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-1.5">
-        <span className="truncate">{user.email ?? "(senza email)"}</span>
+        <span className="truncate">{user.email ?? t("(senza email)")}</span>
         {user.verified ? (
-          <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Email verificata" />
+          <BadgeCheck className="size-4 shrink-0 text-primary" aria-label={t("Email verificata")} />
         ) : (
           <CircleAlert
             className="size-4 shrink-0 text-destructive"
-            aria-label="Email non verificata"
+            aria-label={t("Email non verificata")}
           />
         )}
       </div>
       <div className="mt-0.5 text-xs text-muted-foreground">
-        {user.verified ? "verificata" : "non verificata"} · {user.provider}
+        {user.verified ? t("verificata") : t("non verificata")} · {user.provider}
       </div>
     </div>
   );

@@ -55,9 +55,20 @@ import { clearOffline, onOfflineCopy, withOffline } from "@/lib/offline";
 import { Onboarding } from "./Onboarding";
 import { amIAdmin } from "@/admin/admin.functions";
 import { Link } from "@tanstack/react-router";
+import { adoptAccountLang, locale, tr, useLang, useT } from "@/i18n";
+import { useTypeLabel } from "@/i18n/types";
+import { LangSwitch } from "./LangSwitch";
 const GraphScene = lazy(() => import("@/graph/GraphScene"));
 export function BrainApp({ session }: { session: Session }) {
   const qc = useQueryClient();
+  const t = useT();
+  const lang = useLang();
+  const typeLabel = useTypeLabel();
+  // A language chosen on another device follows the account.
+  useEffect(
+    () => adoptAccountLang(session.user.user_metadata?.["lang"]),
+    [session.user.user_metadata],
+  );
   const graph = useQuery({ queryKey: ["graph"], queryFn: () => withOffline("graph", loadGraph) });
   const notes = useQuery({ queryKey: ["notes"], queryFn: () => withOffline("notes", listNotes) });
   const [offline, setOffline] = useState(false);
@@ -96,9 +107,10 @@ export function BrainApp({ session }: { session: Session }) {
         /* the demo can still be removed from the menu */
       }
     }
-    toast.message("Demo chiusa", {
-      description:
+    toast.message(t("Demo chiusa"), {
+      description: t(
         "La puoi riattivare quando vuoi dal menu ⋯ → Carica demo, o rivedere l’introduzione.",
+      ),
       duration: 7000,
     });
   };
@@ -188,16 +200,19 @@ export function BrainApp({ session }: { session: Session }) {
       return;
     }
     new Notification("Sinapsi", {
-      body: dueCount === 1 ? "Hai 1 promemoria per oggi." : `Hai ${dueCount} promemoria per oggi.`,
+      body:
+        dueCount === 1
+          ? t("Hai 1 promemoria per oggi.")
+          : t("Hai {n} promemoria per oggi.", { n: dueCount }),
       icon: "/favicon.ico",
     });
-  }, [dueCount, today]);
+  }, [dueCount, today, t]);
   const statusText = describeStatus(pipeline.status, pipeline.model);
   const reorganize = async () => {
     setMenu(false);
     setCluster(null);
     const groups = await pipeline.run({ reorganize: true });
-    if (!groups) toast.message("Servono almeno 6 note collegate per formare le costellazioni.");
+    if (!groups) toast.message(t("Servono almeno 6 note collegate per formare le costellazioni."));
   };
   const highlighted = useMemo(
     () =>
@@ -212,11 +227,11 @@ export function BrainApp({ session }: { session: Session }) {
     setBusy(true);
     try {
       if (graph.data?.demoCount) await clearDemo();
-      else await seedDemo(session.user.id);
+      else await seedDemo(session.user.id, lang);
       setSelected(null);
       await refresh();
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(tr((e as Error).message));
     } finally {
       setBusy(false);
     }
@@ -245,7 +260,7 @@ export function BrainApp({ session }: { session: Session }) {
         <Suspense
           fallback={
             <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
-              Apertura del grafo…
+              {t("Apertura del grafo…")}
             </div>
           }
         >
@@ -267,20 +282,23 @@ export function BrainApp({ session }: { session: Session }) {
           <p className="mt-1 whitespace-nowrap font-mono text-[10px] text-muted-foreground">
             {graph.data ? (
               <>
-                {graph.data.nodes.length} note
-                <span className="hidden sm:inline"> · {graph.data.edges.length} connessioni</span>
+                {t("{n} note", { n: graph.data.nodes.length })}
+                <span className="hidden sm:inline">
+                  {" · "}
+                  {t("{n} connessioni", { n: graph.data.edges.length })}
+                </span>
               </>
             ) : (
-              "Caricamento…"
+              t("Caricamento…")
             )}
           </p>
         </div>
         <div className="pointer-events-auto flex shrink-0 items-center gap-1 sm:gap-2">
-          <nav className="flex border-r border-border pr-1 sm:pr-2" aria-label="Vista">
+          <nav className="flex border-r border-border pr-1 sm:pr-2" aria-label={t("Vista")}>
             {(
               [
-                { value: "graph", icon: Network, label: "Grafo" },
-                { value: "list", icon: List, label: "Elenco" },
+                { value: "graph", icon: Network, label: t("Grafo") },
+                { value: "list", icon: List, label: t("Elenco") },
                 { value: "timeline", icon: CalendarDays, label: "Timeline" },
               ] as const
             ).map((v) => (
@@ -301,8 +319,8 @@ export function BrainApp({ session }: { session: Session }) {
             variant="ghost"
             size="icon"
             className="relative"
-            aria-label={dueCount ? `Promemoria, ${dueCount} per oggi` : "Promemoria"}
-            title="Promemoria e riepilogo"
+            aria-label={dueCount ? t("Promemoria, {n} per oggi", { n: dueCount }) : t("Promemoria")}
+            title={t("Promemoria e riepilogo")}
             onClick={() => {
               setRemindersOpen(true);
               setMenu(false);
@@ -325,13 +343,13 @@ export function BrainApp({ session }: { session: Session }) {
           </Button>
           <Button onClick={() => setEditor("new")} size="sm">
             <Plus />
-            <span className="hidden sm:inline">Nuova nota</span>
+            <span className="hidden sm:inline">{t("Nuova nota")}</span>
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Altre azioni"
-            title="Altre azioni"
+            aria-label={t("Altre azioni")}
+            title={t("Altre azioni")}
             onClick={() => setMenu(!menu)}
           >
             <MoreHorizontal />
@@ -346,7 +364,7 @@ export function BrainApp({ session }: { session: Session }) {
               onClick={toggleDemo}
             >
               <Sparkles />
-              {graph.data?.demoCount ? "Rimuovi demo" : "Carica demo"}
+              {graph.data?.demoCount ? t("Rimuovi demo") : t("Carica demo")}
             </Button>
             <Button
               variant="ghost"
@@ -357,26 +375,26 @@ export function BrainApp({ session }: { session: Session }) {
               }}
             >
               <PlayCircle />
-              Rivedi l’introduzione
+              {t("Rivedi l’introduzione")}
             </Button>
             {admin.data?.admin && (
               <Button variant="ghost" className="w-full justify-start" asChild>
                 <Link to="/admin">
                   <ShieldCheck />
-                  Amministrazione
+                  {t("Amministrazione")}
                 </Link>
               </Button>
             )}
             <Button
               variant="ghost"
-              className="w-full justify-start"
+              className="h-auto min-h-9 w-full justify-start whitespace-normal py-2 text-left"
               onClick={() => {
                 setMenu(false);
                 setImportOpen(true);
               }}
             >
               <Inbox />
-              Importa e collega (chat, contatti, calendario, GitHub)
+              {t("Importa e collega (chat, contatti, calendario, GitHub)")}
             </Button>
             <Button
               variant="ghost"
@@ -385,7 +403,7 @@ export function BrainApp({ session }: { session: Session }) {
               onClick={() => void reorganize()}
             >
               <Orbit />
-              Riorganizza costellazioni
+              {t("Riorganizza costellazioni")}
             </Button>
             <Button
               variant="ghost"
@@ -395,9 +413,9 @@ export function BrainApp({ session }: { session: Session }) {
                 setBusy(true);
                 try {
                   const count = await exportArchive();
-                  toast.success(`Esportate ${count} note`);
+                  toast.success(t("Esportate {n} note", { n: count }));
                 } catch (e) {
-                  toast.error((e as Error).message);
+                  toast.error(tr((e as Error).message));
                 } finally {
                   setBusy(false);
                   setMenu(false);
@@ -405,7 +423,7 @@ export function BrainApp({ session }: { session: Session }) {
               }}
             >
               <Download />
-              Esporta tutto
+              {t("Esporta tutto")}
             </Button>
             <Button
               variant="ghost"
@@ -413,7 +431,7 @@ export function BrainApp({ session }: { session: Session }) {
               onClick={() => input.current?.click()}
             >
               <Upload />
-              Ripristina archivio ZIP
+              {t("Ripristina archivio ZIP")}
             </Button>
             <Button
               variant="ghost"
@@ -424,7 +442,7 @@ export function BrainApp({ session }: { session: Session }) {
               }}
             >
               <KeyRound />
-              Imposta password
+              {t("Imposta password")}
             </Button>
             <Button
               variant="ghost"
@@ -432,12 +450,15 @@ export function BrainApp({ session }: { session: Session }) {
               onClick={async () => {
                 await clearOffline();
                 const { error } = await supabase.auth.signOut();
-                if (error) toast.error("Impossibile uscire.");
+                if (error) toast.error(t("Impossibile uscire."));
               }}
             >
               <LogOut />
-              Esci
+              {t("Esci")}
             </Button>
+            <div className="mt-1 border-t border-border px-2 pb-1 pt-2">
+              <LangSwitch />
+            </div>
           </div>
         )}
       </header>
@@ -446,7 +467,7 @@ export function BrainApp({ session }: { session: Session }) {
         type="file"
         accept=".zip"
         className="hidden"
-        aria-label="Importa archivio ZIP"
+        aria-label={t("Importa archivio ZIP")}
         onChange={async (e) => {
           const file = e.target.files?.[0];
           e.target.value = "";
@@ -455,33 +476,35 @@ export function BrainApp({ session }: { session: Session }) {
             setImported(readZip(new Uint8Array(await file.arrayBuffer())));
             setMenu(false);
           } catch (err) {
-            toast.error((err as Error).message);
+            toast.error(tr((err as Error).message));
           }
         }}
       />
       {graph.isLoading && (
         <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
-          Caricamento delle note…
+          {t("Caricamento delle note…")}
         </div>
       )}
       {graph.error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <p className="text-sm text-muted-foreground">{graph.error.message}</p>
+          <p className="text-sm text-muted-foreground">{tr(graph.error.message)}</p>
           <Button variant="outline" onClick={() => graph.refetch()}>
-            Riprova
+            {t("Riprova")}
           </Button>
         </div>
       )}
       {graph.data?.nodes.length === 0 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-5">
           <Network className="size-9 text-muted-foreground" />
-          <h2 className="text-2xl font-light">Le tue idee, uno spazio tutto loro.</h2>
+          <h2 className="text-center text-2xl font-light">
+            {t("Le tue idee, uno spazio tutto loro.")}
+          </h2>
           <Button onClick={() => setEditor("new")}>
             <Plus />
-            Nuova nota
+            {t("Nuova nota")}
           </Button>
           <Button variant="ghost" onClick={toggleDemo} disabled={busy}>
-            Carica demo
+            {t("Carica demo")}
           </Button>
         </div>
       )}
@@ -490,18 +513,20 @@ export function BrainApp({ session }: { session: Session }) {
           <div className="mx-auto max-w-3xl">
             <div className="mb-6 flex items-center justify-between gap-3">
               <h2 className="text-xl font-light">
-                {view === "timeline" ? "Timeline" : "Tutte le note"}
+                {view === "timeline" ? "Timeline" : t("Tutte le note")}
               </h2>
               <div className="flex items-center gap-3">
                 <select
                   className="h-8 max-w-36 rounded-md border border-input bg-background px-2 text-xs"
-                  aria-label="Filtra per tipo"
+                  aria-label={t("Filtra per tipo")}
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 >
-                  <option value="all">Tutti i tipi</option>
-                  {[...new Set(notes.data?.map((n) => n.type))].map((t) => (
-                    <option key={t}>{t}</option>
+                  <option value="all">{t("Tutti i tipi")}</option>
+                  {[...new Set(notes.data?.map((n) => n.type))].map((type) => (
+                    <option key={type} value={type}>
+                      {typeLabel(type)}
+                    </option>
                   ))}
                 </select>
                 <label className="flex items-center gap-1 text-xs">
@@ -510,12 +535,12 @@ export function BrainApp({ session }: { session: Session }) {
                     checked={privateOnly}
                     onChange={(e) => setPrivateOnly(e.target.checked)}
                   />
-                  Private
+                  {t("Private")}
                 </label>
               </div>
             </div>
             {!rows.length && (
-              <p className="text-sm text-muted-foreground">Nessuna nota corrispondente.</p>
+              <p className="text-sm text-muted-foreground">{t("Nessuna nota corrispondente.")}</p>
             )}
             <ul className="divide-y divide-border">
               {rows.map((n) => (
@@ -526,12 +551,12 @@ export function BrainApp({ session }: { session: Session }) {
                     className="h-auto w-full justify-between gap-4 rounded-none px-1 py-4 text-left font-normal"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm">{n.title || "Senza titolo"}</span>
+                      <span className="block truncate text-sm">{n.title || t("Senza titolo")}</span>
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        {n.type} ·{" "}
+                        {typeLabel(n.type)} ·{" "}
                         {new Date(
                           view === "timeline" ? (n.event_date ?? n.created_at) : n.created_at,
-                        ).toLocaleDateString("it-IT")}
+                        ).toLocaleDateString(locale(lang))}
                       </span>
                     </span>
                     <span className="flex shrink-0 gap-2 text-muted-foreground">
@@ -575,7 +600,9 @@ export function BrainApp({ session }: { session: Session }) {
             aria-expanded={legend}
             onClick={() => setLegend(!legend)}
           >
-            <span>Costellazioni · {graph.data.constellations.length}</span>
+            <span>
+              {t("Costellazioni")} · {graph.data.constellations.length}
+            </span>
             <span>{legend ? "–" : "+"}</span>
           </button>
           {legend && (
@@ -610,8 +637,8 @@ export function BrainApp({ session }: { session: Session }) {
           <Button
             size="icon"
             variant={mode === "pan" ? "secondary" : "ghost"}
-            aria-label="Sposta"
-            title="Sposta"
+            aria-label={t("Sposta")}
+            title={t("Sposta")}
             onClick={() => setMode("pan")}
           >
             <Move />
@@ -619,8 +646,8 @@ export function BrainApp({ session }: { session: Session }) {
           <Button
             size="icon"
             variant={mode === "orbit" ? "secondary" : "ghost"}
-            aria-label="Ruota"
-            title="Ruota"
+            aria-label={t("Ruota")}
+            title={t("Ruota")}
             onClick={() => setMode("orbit")}
           >
             <Rotate3D />
@@ -630,8 +657,8 @@ export function BrainApp({ session }: { session: Session }) {
             size="icon"
             variant="ghost"
             className="hidden sm:inline-flex"
-            aria-label="Zoom avanti"
-            title="Zoom avanti"
+            aria-label={t("Zoom avanti")}
+            title={t("Zoom avanti")}
             onClick={() => move("in")}
           >
             <ZoomIn />
@@ -640,8 +667,8 @@ export function BrainApp({ session }: { session: Session }) {
             size="icon"
             variant="ghost"
             className="hidden sm:inline-flex"
-            aria-label="Zoom indietro"
-            title="Zoom indietro"
+            aria-label={t("Zoom indietro")}
+            title={t("Zoom indietro")}
             onClick={() => move("out")}
           >
             <ZoomOut />
@@ -649,8 +676,8 @@ export function BrainApp({ session }: { session: Session }) {
           <Button
             size="icon"
             variant="ghost"
-            aria-label="Centra grafo"
-            title="Centra grafo"
+            aria-label={t("Centra grafo")}
+            title={t("Centra grafo")}
             onClick={() => {
               setSelected(null);
               move("reset");
@@ -668,7 +695,9 @@ export function BrainApp({ session }: { session: Session }) {
               role="status"
             >
               <WifiOff className="size-3.5 shrink-0" />
-              Sei offline: vedi l’ultima copia salvata, le modifiche tornano quando sei connesso.
+              {t(
+                "Sei offline: vedi l’ultima copia salvata, le modifiche tornano quando sei connesso.",
+              )}
             </div>
           )}
           {statusText && !offline && (
@@ -688,7 +717,7 @@ export function BrainApp({ session }: { session: Session }) {
                     onClick={() => void pipeline.retry()}
                   >
                     <RefreshCw />
-                    Riprova
+                    {t("Riprova")}
                   </Button>
                 </>
               ) : (
@@ -704,10 +733,10 @@ export function BrainApp({ session }: { session: Session }) {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-xs text-muted-foreground">
                   {result.error
-                    ? "Ricerca"
+                    ? t("Ricerca")
                     : thread.length > 1
-                      ? `Conversazione · ${thread.length} domande`
-                      : `${result.results.length} idee trovate`}
+                      ? t("Conversazione · {n} domande", { n: thread.length })
+                      : t("{n} idee trovate", { n: result.results.length })}
                 </span>
                 <div className="flex items-center gap-1">
                   {thread.length > 0 && (
@@ -722,13 +751,13 @@ export function BrainApp({ session }: { session: Session }) {
                       }}
                     >
                       <MessagesSquare />
-                      Nuova conversazione
+                      {t("Nuova conversazione")}
                     </Button>
                   )}
                   <Button
                     size="icon"
                     variant="ghost"
-                    aria-label="Chiudi risultati"
+                    aria-label={t("Chiudi risultati")}
                     onClick={() => {
                       setResult(null);
                       setThread([]);
@@ -738,11 +767,11 @@ export function BrainApp({ session }: { session: Session }) {
                   </Button>
                 </div>
               </div>
-              {thread.slice(0, -1).map((t, i) => (
+              {thread.slice(0, -1).map((turn, i) => (
                 <div key={i} className="mb-3 border-b border-border pb-3">
-                  <p className="text-xs font-medium text-muted-foreground">{t.q}</p>
+                  <p className="text-xs font-medium text-muted-foreground">{turn.q}</p>
                   <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-                    {t.a}
+                    {turn.a}
                   </p>
                 </div>
               ))}
@@ -751,12 +780,12 @@ export function BrainApp({ session }: { session: Session }) {
                   {thread[thread.length - 1]!.q}
                 </p>
               )}
-              {result.error && <p className="text-sm text-destructive">{result.error}</p>}
+              {result.error && <p className="text-sm text-destructive">{tr(result.error)}</p>}
               {result.answer && (
                 <p className="mb-3 whitespace-pre-wrap text-sm leading-6">{result.answer}</p>
               )}
               {!result.error && !result.answer && !result.results.length && (
-                <p className="text-sm text-muted-foreground">Nessuna idea trovata.</p>
+                <p className="text-sm text-muted-foreground">{t("Nessuna idea trovata.")}</p>
               )}
               {result.results.map((r) => (
                 <Button
@@ -766,7 +795,9 @@ export function BrainApp({ session }: { session: Session }) {
                   onClick={() => setSelected(r.id)}
                 >
                   <span>{r.title}</span>
-                  <span className="ml-3 shrink-0 text-xs text-muted-foreground">{r.type}</span>
+                  <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+                    {typeLabel(r.type)}
+                  </span>
                 </Button>
               ))}
             </div>
@@ -802,11 +833,11 @@ export function BrainApp({ session }: { session: Session }) {
                 });
                 setResult(res);
                 if (searchMode === "ai" && res.answer && !res.error) {
-                  setThread((t) => [...t, { q: query, a: res.answer }].slice(-6));
+                  setThread((prev) => [...prev, { q: query, a: res.answer }].slice(-6));
                   setQuery("");
                 }
               } catch {
-                toast.error("Ricerca non disponibile. Riprova.");
+                toast.error(t("Ricerca non disponibile. Riprova."));
               } finally {
                 setSearching(false);
               }
@@ -815,13 +846,13 @@ export function BrainApp({ session }: { session: Session }) {
             <Search className="ml-2 size-4 shrink-0 text-muted-foreground" />
             <input
               className="min-w-0 flex-1 bg-transparent px-1 py-3 text-base outline-none sm:text-sm"
-              aria-label="Cerca idee"
+              aria-label={t("Cerca idee")}
               placeholder={
                 searchMode === "ai"
                   ? thread.length
-                    ? "Continua la conversazione…"
-                    : "Chiedi alla tua memoria…"
-                  : "Cerca tra le idee…"
+                    ? t("Continua la conversazione…")
+                    : t("Chiedi alla tua memoria…")
+                  : t("Cerca tra le idee…")
               }
               value={query}
               onChange={(e) => {
@@ -836,8 +867,8 @@ export function BrainApp({ session }: { session: Session }) {
               className="shrink-0"
               title={
                 searchMode === "ai"
-                  ? "Risposte AI attive: tocca per cercare per parole"
-                  : "Attiva le risposte AI dalla tua memoria"
+                  ? t("Risposte AI attive: tocca per cercare per parole")
+                  : t("Attiva le risposte AI dalla tua memoria")
               }
               aria-pressed={searchMode === "ai"}
               onClick={() => setSearchMode(searchMode === "ai" ? "keyword" : "ai")}
@@ -848,7 +879,7 @@ export function BrainApp({ session }: { session: Session }) {
             <Button
               type="submit"
               size="icon"
-              aria-label="Avvia ricerca"
+              aria-label={t("Avvia ricerca")}
               disabled={searching || !query.trim()}
             >
               {searching ? (
@@ -895,18 +926,19 @@ export function BrainApp({ session }: { session: Session }) {
           className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-5 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
-          aria-label="Conferma importazione"
+          aria-label={t("Conferma importazione")}
         >
           <div className="panel-shadow w-full max-w-md space-y-5 rounded-lg border border-border bg-card p-6">
-            <h2 className="text-xl font-light">Importa archivio</h2>
+            <h2 className="text-xl font-light">{t("Importa archivio")}</h2>
             <p className="text-sm text-muted-foreground">
-              {imported.tables.notes.length} note e {imported.tables.edges.length} connessioni
-              verificate. Le note già presenti nello stesso archivio saranno ripristinate, senza
-              duplicati.
+              {t(
+                "{notes} note e {edges} connessioni verificate. Le note già presenti nello stesso archivio saranno ripristinate, senza duplicati.",
+                { notes: imported.tables.notes.length, edges: imported.tables.edges.length },
+              )}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setImported(null)}>
-                Annulla
+                {t("Annulla")}
               </Button>
               <Button
                 disabled={busy}
@@ -919,15 +951,15 @@ export function BrainApp({ session }: { session: Session }) {
                     setResult(null);
                     await refresh();
                     void pipeline.run();
-                    toast.success(`Ripristinate ${count} note`);
+                    toast.success(t("Ripristinate {n} note", { n: count }));
                   } catch (e) {
-                    toast.error((e as Error).message);
+                    toast.error(tr((e as Error).message));
                   } finally {
                     setBusy(false);
                   }
                 }}
               >
-                {busy ? "Importazione…" : "Importa"}
+                {busy ? t("Importazione…") : t("Importa")}
               </Button>
             </div>
           </div>
@@ -960,6 +992,7 @@ export function BrainApp({ session }: { session: Session }) {
 function PasswordDialog({ onClose }: { onClose: () => void }) {
   const [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false);
+  const t = useT();
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-5 backdrop-blur-sm"
@@ -972,41 +1005,41 @@ function PasswordDialog({ onClose }: { onClose: () => void }) {
         onSubmit={async (e) => {
           e.preventDefault();
           if (password.length < 8) {
-            toast.error("Usa almeno 8 caratteri.");
+            toast.error(t("Usa almeno 8 caratteri."));
             return;
           }
           setBusy(true);
           const { error } = await supabase.auth.updateUser({ password });
           setBusy(false);
-          if (error) toast.error("Non sono riuscito a salvare la password. Riprova.");
+          if (error) toast.error(t("Non sono riuscito a salvare la password. Riprova."));
           else {
-            toast.success("Password impostata: da ora puoi entrare con email e password.");
+            toast.success(t("Password impostata: da ora puoi entrare con email e password."));
             onClose();
           }
         }}
       >
         <h2 id="password-title" className="text-xl font-light">
-          Imposta una password
+          {t("Imposta una password")}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Così la prossima volta entri con email e password, senza aspettare il link.
+          {t("Così la prossima volta entri con email e password, senza aspettare il link.")}
         </p>
         <input
           type="password"
           autoFocus
           autoComplete="new-password"
-          aria-label="Nuova password"
-          placeholder="Almeno 8 caratteri"
+          aria-label={t("Nuova password")}
+          placeholder={t("Almeno 8 caratteri")}
           className="h-11 w-full rounded-md border border-input bg-background px-3 text-base outline-none focus:border-ring sm:text-sm"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            Annulla
+            {t("Annulla")}
           </Button>
           <Button type="submit" disabled={busy}>
-            {busy ? "Salvataggio…" : "Salva"}
+            {busy ? t("Salvataggio…") : t("Salva")}
           </Button>
         </div>
       </form>

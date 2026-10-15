@@ -1,3 +1,4 @@
+import { t, tr } from "@/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isConstrainedDevice, onModelProgress, releaseModel, type ModelProgress } from "./embed";
 import {
@@ -58,7 +59,12 @@ export function usePipeline(
         failed
           ? {
               kind: "error",
-              message: `${failed === 1 ? "1 nota non è stata collegata" : `${failed} note non sono state collegate`}${failedNotice.current ? " (il telefono ha esaurito la memoria)" : ""}.`,
+              message:
+                (failed === 1
+                  ? t("1 nota non è stata collegata")
+                  : t("{n} note non sono state collegate", { n: failed })) +
+                (failedNotice.current ? t(" (il telefono ha esaurito la memoria)") : "") +
+                ".",
               retryFailed: true,
             }
           : { kind: "idle" },
@@ -68,7 +74,7 @@ export function usePipeline(
       console.error("[Sinapsi] elaborazione AI", error);
       setStatus({
         kind: "error",
-        message: error instanceof Error ? error.message : "Elaborazione AI non riuscita.",
+        message: error instanceof Error ? error.message : t("Elaborazione AI non riuscita."),
       });
     } finally {
       running.current = false;
@@ -93,14 +99,16 @@ export function usePipeline(
 
 /** Human-readable status line, or null when there is nothing to say. */
 export function describeStatus(status: PipelineStatus, model: ModelProgress): string | null {
-  if (status.kind === "error") return status.message;
+  if (status.kind === "error") return tr(status.message);
   if (!model.ready && model.total > 0 && model.loaded < model.total)
-    return `Scarico il modello AI locale (solo la prima volta) · ${Math.round((model.loaded / model.total) * 100)}%`;
+    return t("Scarico il modello AI locale (solo la prima volta) · {pct}%", {
+      pct: Math.round((model.loaded / model.total) * 100),
+    });
   if (status.kind !== "busy") return null;
   if (status.phase === "linking") {
-    if (!model.ready) return "Preparo il modello AI locale…";
-    return `Collego le idee · ${status.done}/${status.total}`;
+    if (!model.ready) return t("Preparo il modello AI locale…");
+    return t("Collego le idee · {done}/{total}", { done: status.done, total: status.total });
   }
-  if (status.phase === "clustering") return "Riconosco le costellazioni…";
-  return "Do un nome alle costellazioni…";
+  if (status.phase === "clustering") return t("Riconosco le costellazioni…");
+  return t("Do un nome alle costellazioni…");
 }

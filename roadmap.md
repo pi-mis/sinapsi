@@ -54,3 +54,4 @@
 - [x] Animazione di benvenuto: cosa ci metti dentro, a cosa serve, connettori e GitHub; alla fine si esce dalla demo
 - [x] "Rivedi l'introduzione" dal menu ⋯
 - [x] Pagina /admin per gli amministratori: utenti registrati, email verificate, note, collegamenti e uso dell'AI (solo conteggi)
+- [x] Italiano e inglese: lingua scelta in base al dispositivo o alla connessione, modificabile all'inizio dell'introduzione e dal menu; anche l'AI risponde nella lingua scelta
